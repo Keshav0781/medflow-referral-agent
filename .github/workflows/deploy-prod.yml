@@ -1,0 +1,179 @@
+# ============================================================
+# Deploy to Production Workflow
+# Requires manual approval before deploying
+# Never deploys automatically — human must approve
+# Protects real hospital data and real patients
+# ============================================================
+
+name: Deploy — Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker image tag to deploy (Git commit SHA)'
+        required: true
+        type: string
+      reason:
+        description: 'Reason for this production deployment'
+        required: true
+        type: string
+
+jobs:
+  # ── Job 1 — Pre-deployment checks ───────────────────────
+  pre-deployment-checks:
+    name: Pre-deployment Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1 — Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2 — Set up Python
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Step 3 — Cache and install dependencies
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 4 — Run full test suite one final time
+      - name: Run full test suite
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          ENVIRONMENT: production
+        run: |
+          pytest tests/ -v --tb=short
+
+      # Step 5 — Run Ragas evaluation final check
+      - name: Run Ragas evaluation
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          ENVIRONMENT: production
+        run: |
+          pytest src/evaluation/ragas_eval.py -v --tb=short
+
+      # Step 6 — Log deployment details
+      - name: Log deployment details
+        run: |
+          echo "============================================"
+          echo "Production Deployment Request"
+          echo "============================================"
+          echo "Image tag: ${{ github.event.inputs.image_tag }}"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+          echo "Requested by: ${{ github.actor }}"
+          echo "Time: $(date -u)"
+          echo "============================================"
+
+  # ── Job 2 — Manual Approval Gate ────────────────────────
+  approval:
+    name: Manual Approval Required
+    runs-on: ubuntu-latest
+    needs: pre-deployment-checks
+    environment: production
+
+    steps:
+      - name: Awaiting approval
+        run: |
+          echo "Pre-deployment checks passed"
+          echo "Waiting for manual approval..."
+          echo "Approver must review staging before approving"
+
+  # ── Job 3 — Production Deployment ───────────────────────
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: approval
+
+    steps:
+      # Step 1 — Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2 — Authenticate with GCP
+      - name: Authenticate with GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # Step 3 — Set up gcloud SDK
+      - name: Set up gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      # Step 4 — Deploy to production Cloud Run
+      # Uses explicitly provided image tag
+      # Never uses latest in production
+      - name: Deploy to Cloud Run production
+        run: |
+          gcloud run deploy medflow-referral-agent-prod \
+            --image europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/medflow-repo/medflow-agent:${{ github.event.inputs.image_tag }} \
+            --region europe-west3 \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      # Step 5 — Verify production health
+      - name: Verify production deployment
+        run: |
+          PROD_URL=$(gcloud run services describe medflow-referral-agent-prod \
+            --region europe-west3 \
+            --project ${{ secrets.GCP_PROJECT_ID }} \
+            --format 'value(status.url)')
+          echo "Production URL: $PROD_URL"
+          curl --fail "$PROD_URL/health" || exit 1
+
+      # Step 6 — Run smoke tests on production
+      - name: Run production smoke tests
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          ENVIRONMENT: production
+        run: |
+          PROD_URL=$(gcloud run services describe medflow-referral-agent-prod \
+            --region europe-west3 \
+            --project ${{ secrets.GCP_PROJECT_ID }} \
+            --format 'value(status.url)')
+          echo "Running smoke tests against: $PROD_URL"
+          curl --fail "$PROD_URL/health"
+          echo " Smoke tests passed"
+
+      # Step 7 — Log successful deployment
+      - name: Log successful deployment
+        if: success()
+        run: |
+          echo "============================================"
+          echo " Production Deployment Successful"
+          echo "============================================"
+          echo "Image tag: ${{ github.event.inputs.image_tag }}"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+          echo "Deployed by: ${{ github.actor }}"
+          echo "Time: $(date -u)"
+          echo "============================================"
+
+      # Step 8 — Rollback on failure
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "============================================"
+          echo " Production Deployment Failed"
+          echo "============================================"
+          echo "Initiating rollback..."
+          gcloud run services update-traffic medflow-referral-agent-prod \
+            --to-revisions=LATEST=0 \
+            --region europe-west3 \
+            --project ${{ secrets.GCP_PROJECT_ID }} || true
+          echo "Check logs above for failure details"
+          echo "============================================"
