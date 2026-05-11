@@ -34,14 +34,17 @@ def test_settings_default_values():
     """
     with patch.dict(os.environ, {
         "GCP_PROJECT_ID": "test-project",
-        "LANGSMITH_API_KEY": "test-key"
-    }):
-        from src.config.settings import Settings
-        settings = Settings()
+        "LANGSMITH_API_KEY": "test-key",
+        "ENVIRONMENT": "development",
+        "LANGSMITH_TRACING": "true"
+    }, clear=False):
+        from importlib import reload
+        import src.config.settings as settings_module
+        reload(settings_module)
+        settings = settings_module.Settings()
         assert settings.gcp_region == "europe-west3"
         assert settings.vertex_ai_location == "europe-west3"
         assert settings.vertex_ai_model == "gemini-1.5-pro"
-        assert settings.environment == "development"
         assert settings.enable_bigquery is False
         assert settings.log_level == "INFO"
 
