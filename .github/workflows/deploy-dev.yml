@@ -29,12 +29,13 @@ jobs:
         run: echo "sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
       # Step 3 — Authenticate with GCP
-      # Uses service account credentials stored in GitHub Secrets
-      # Never hardcode credentials anywhere
+      # Uses Workload Identity Federation — no JSON key needed
+      # More secure — short lived token per workflow run
       - name: Authenticate with GCP
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       # Step 4 — Set up gcloud SDK
       - name: Set up gcloud SDK
