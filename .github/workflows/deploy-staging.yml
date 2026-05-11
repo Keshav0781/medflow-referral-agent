@@ -1,0 +1,115 @@
+# ============================================================
+# Deploy to Staging Workflow
+# Triggers automatically after successful dev deployment
+# Runs Ragas evaluation before deploying
+# If evaluation fails — deployment blocked
+# ============================================================
+
+name: Deploy — Staging
+
+on:
+  workflow_run:
+    workflows:
+      - "Deploy — Dev"
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  deploy-staging:
+    name: Evaluate and Deploy to Staging
+    runs-on: ubuntu-latest
+
+    # Only run if dev deployment succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      # Step 1 — Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2 — Get commit SHA
+      - name: Get commit SHA
+        id: sha
+        run: echo "sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      # Step 3 — Set up Python for Ragas evaluation
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Step 4 — Cache pip dependencies
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # Step 5 — Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 6 — Run Ragas evaluation
+      # This is the quality gate before staging deployment
+      # If routing accuracy below 90% — deployment blocked
+      # If urgency accuracy below 95% — deployment blocked
+      - name: Run Ragas evaluation
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          ENVIRONMENT: staging
+        run: |
+          pytest src/evaluation/ragas_eval.py -v --tb=short
+
+      # Step 7 — Authenticate with GCP
+      - name: Authenticate with GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # Step 8 — Set up gcloud SDK
+      - name: Set up gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      # Step 9 — Deploy to Cloud Run staging
+      # Uses same image built during dev deployment
+      # Same commit SHA — guaranteed identical code
+      - name: Deploy to Cloud Run staging
+        run: |
+          gcloud run deploy medflow-referral-agent-staging \
+            --image europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/medflow-repo/medflow-agent:${{ steps.sha.outputs.sha }} \
+            --region europe-west3 \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      # Step 10 — Verify staging deployment health
+      - name: Verify staging deployment
+        run: |
+          STAGING_URL=$(gcloud run services describe medflow-referral-agent-staging \
+            --region europe-west3 \
+            --project ${{ secrets.GCP_PROJECT_ID }} \
+            --format 'value(status.url)')
+          echo "Staging URL: $STAGING_URL"
+          curl --fail "$STAGING_URL/health" || exit 1
+
+      # Step 11 — Notify success
+      - name: Notify staging deployment success
+        if: success()
+        run: |
+          echo " Successfully deployed commit ${{ steps.sha.outputs.sha }} to staging"
+          echo "Ragas evaluation passed"
+          echo "Ready for manual review before production"
+
+      # Step 12 — Notify failure
+      - name: Notify staging deployment failure
+        if: failure()
+        run: |
+          echo " Staging deployment failed for commit ${{ steps.sha.outputs.sha }}"
+          echo "Check Ragas evaluation results or deployment logs above"
