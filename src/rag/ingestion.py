@@ -11,10 +11,8 @@
 import logging
 import chromadb
 from chromadb.utils import embedding_functions
-from src.config.settings import get_settings
-
 logger = logging.getLogger(__name__)
-settings = get_settings()
+CHROMA_PERSIST_DIR = "./data/chroma"
 
 # ── Department Descriptions ───────────────────────────────────
 # What each department treats
@@ -214,7 +212,7 @@ def ingest_departments() -> bool:
     """
     try:
         client = chromadb.PersistentClient(
-            path=settings.chroma_persist_dir
+            path=CHROMA_PERSIST_DIR
         )
 
         embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
@@ -264,7 +262,7 @@ def ingest_urgency_guidelines() -> bool:
     """
     try:
         client = chromadb.PersistentClient(
-            path=settings.chroma_persist_dir
+            path=CHROMA_PERSIST_DIR
         )
 
         embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
