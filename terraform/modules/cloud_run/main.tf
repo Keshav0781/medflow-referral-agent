@@ -87,13 +87,8 @@ resource "google_cloud_run_v2_service" "medflow_agent" {
       }
 
       env {
-        name = "ENVIRONMENT"
-        value_source {
-          secret_key_ref {
-            secret  = "ENVIRONMENT"
-            version = "latest"
-          }
-        }
+        name  = "ENVIRONMENT"
+        value = var.environment
       }
 
       # ── Non-secret environment variables ─────────────────
