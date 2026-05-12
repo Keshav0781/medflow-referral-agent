@@ -8,8 +8,8 @@
 
 import json
 import logging
-from vertexai.generative_models import GenerativeModel
-import vertexai
+from google import genai
+from google.genai import types
 from src.agent.state import ReferralState
 from src.config.settings import get_settings
 
@@ -162,13 +162,12 @@ def _call_llm_for_routing(
     Temperature 0.1 — consistent decisions for clinical routing.
     """
 
-    # Initialise Vertex AI
-    vertexai.init(
+    # Initialise Google GenAI client
+    client = genai.Client(
+        vertexai=True,
         project=settings.gcp_project_id,
         location=settings.vertex_ai_location
     )
-
-    model = GenerativeModel(settings.vertex_ai_model)
 
     # Format department context for prompt
     context_text = ""
@@ -208,12 +207,13 @@ Rules:
 - department must be one of the available departments"""
 
     # Call Gemini with low temperature for consistency
-    response = model.generate_content(
-        prompt,
-        generation_config={
-            "temperature": 0.1,
-            "max_output_tokens": 500,
-        }
+    response = client.models.generate_content(
+        model=settings.vertex_ai_model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.1,
+            max_output_tokens=1000,
+        )
     )
 
     # Parse JSON response

@@ -7,8 +7,8 @@
 # ============================================================
 
 import logging
-from vertexai.generative_models import GenerativeModel
-import vertexai
+from google import genai
+from google.genai import types
 from src.agent.state import ReferralState
 from src.config.settings import get_settings
 
@@ -92,12 +92,11 @@ def _call_llm_for_summary(
     Maximum 150 words — concise and actionable.
     """
 
-    vertexai.init(
+    client = genai.Client(
+        vertexai=True,
         project=settings.gcp_project_id,
         location=settings.vertex_ai_location
     )
-
-    model = GenerativeModel(settings.vertex_ai_model)
 
     prompt = f"""You are a clinical documentation assistant at a German hospital.
 Your task is to write a clear concise summary of a patient referral
@@ -129,12 +128,13 @@ REQUIREMENTS:
 
 Write the summary directly — no introduction or preamble."""
 
-    response = model.generate_content(
-        prompt,
-        generation_config={
-            "temperature": 0.3,
-            "max_output_tokens": 300,
-        }
+    response = client.models.generate_content(
+        model=settings.vertex_ai_model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.3,
+            max_output_tokens=1000,
+        )
     )
 
     summary = response.text.strip()

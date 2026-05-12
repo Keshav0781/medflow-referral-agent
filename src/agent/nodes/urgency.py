@@ -8,8 +8,8 @@
 
 import json
 import logging
-from vertexai.generative_models import GenerativeModel
-import vertexai
+from google import genai
+from google.genai import types
 from src.agent.state import ReferralState
 from src.config.settings import get_settings
 
@@ -184,12 +184,11 @@ def _call_llm_for_urgency(
     Better to over-triage than under-triage.
     """
 
-    vertexai.init(
+    client = genai.Client(
+        vertexai=True,
         project=settings.gcp_project_id,
         location=settings.vertex_ai_location
     )
-
-    model = GenerativeModel(settings.vertex_ai_model)
 
     # Format urgency guidelines
     guidelines_text = ""
@@ -250,12 +249,13 @@ Rules:
 - reason must be 1-2 sentences maximum
 - if uncertain between two levels — choose the higher urgency"""
 
-    response = model.generate_content(
-        prompt,
-        generation_config={
-            "temperature": 0.1,
-            "max_output_tokens": 300,
-        }
+    response = client.models.generate_content(
+        model=settings.vertex_ai_model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.1,
+            max_output_tokens=1000,
+        )
     )
 
     response_text = response.text.strip()
