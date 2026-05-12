@@ -51,8 +51,11 @@ COPY --from=builder /root/.local /home/medflow/.local
 # Copy application code
 COPY src/ ./src/
 
-# Set ownership to non-root user
-RUN chown -R medflow:medflow /app
+# Copy startup script
+COPY startup.sh ./startup.sh
+
+# Set ownership to non-root user and make startup script executable
+RUN chown -R medflow:medflow /app && chmod +x /app/startup.sh
 
 # Switch to non-root user
 USER medflow
@@ -74,4 +77,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"
 
 # Start the application
-CMD ["python", "-m", "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["/app/startup.sh"]
