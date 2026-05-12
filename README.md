@@ -86,10 +86,10 @@ Node 8 — Audit log to BigQuery (async)
 
 | Environment | Purpose | Deployment |
 |---|---|---|
-| Local | Development on Mac | Manual |
-| Dev | Shared team testing | Auto on feature branch push |
-| Staging | Pre-production testing | Auto on merge to main |
-| Production | Live system | Manual approval required |
+| Local | Development on Mac | `python -m src.api.main` |
+| Dev | Shared team testing | Auto on merge to main |
+| Staging | Pre-production testing | Auto after dev succeeds + Ragas gate |
+| Production | Live system | Manual approval required — promote verified staging image |
 
 ---
 
@@ -129,13 +129,25 @@ cp .env.example .env
 
 **5. Authenticate with GCP**
 ```bash
+export PATH=$PATH:/opt/homebrew/bin
 gcloud auth login
 gcloud config set project medflow-referral-agent
+gcloud auth application-default login --scopes="https://www.googleapis.com/auth/cloud-platform"
 ```
 
-**6. Run the application**
+**6. Run RAG ingestion — populates ChromaDB locally**
 ```bash
-python src/api/main.py
+python -m src.rag.ingestion
+```
+
+**7. Run the application**
+```bash
+python -m src.api.main
+```
+
+**8. Verify health endpoint**
+```bash
+curl http://localhost:8080/health
 ```
 
 ---
