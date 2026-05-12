@@ -181,3 +181,20 @@ resource "google_project_iam_member" "pubsub_subscriber" {
   role    = "roles/pubsub.subscriber"
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
+# Allow public access to Cloud Run service
+# Required for health checks and coordinator dashboard
+resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_service.medflow_agent.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+# Allow github-actions-deployer to deploy as Cloud Run service account
+# Required for CI/CD pipeline to deploy new revisions
+resource "google_service_account_iam_member" "github_actions_sa_user" {
+  service_account_id = google_service_account.cloud_run_sa.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${var.github_actions_sa}"
+}
