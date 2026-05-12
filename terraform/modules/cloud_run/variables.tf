@@ -73,3 +73,8 @@ variable "log_level" {
   type        = string
   default     = "INFO"
 }
+variable "github_actions_sa" {
+  description = "GitHub Actions deployer service account email — granted actAs permission on Cloud Run SA"
+  type        = string
+  default     = "github-actions-deployer@medflow-referral-agent.iam.gserviceaccount.com"
+}
