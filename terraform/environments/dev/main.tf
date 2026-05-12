@@ -30,9 +30,11 @@ provider "google" {
 # ── Module 1 — Pub/Sub ───────────────────────────────────────
 # Create first — storage module needs topic_id from here
 module "pubsub" {
-  source      = "../../modules/pubsub"
-  project_id  = var.project_id
-  environment = var.environment
+  source        = "../../modules/pubsub"
+  project_id    = var.project_id
+  environment   = var.environment
+  push_endpoint = "${module.cloud_run.service_url}/webhook/pubsub"
+  depends_on    = [module.cloud_run]
 }
 
 # ── Module 2 — Storage ───────────────────────────────────────
