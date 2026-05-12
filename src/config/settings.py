@@ -6,6 +6,7 @@ Fails fast if any required variable is missing.
 
 from pydantic_settings import BaseSettings
 from pydantic import Field
+from pydantic_settings import SettingsConfigDict
 from functools import lru_cache
 
 
@@ -98,10 +99,11 @@ class Settings(BaseSettings):
         description="Minimum urgency accuracy for deployment"
     )
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
 
 
 @lru_cache()
