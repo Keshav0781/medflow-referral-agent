@@ -134,6 +134,16 @@ resource "google_cloud_run_v2_service" "medflow_agent" {
     google_project_iam_member.bigquery_editor,
     google_project_iam_member.storage_object_viewer,
   ]
+
+  # CI/CD pipeline owns the image tag — Terraform must not override it
+  # Every pipeline deployment uses a specific commit SHA
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image,
+      client,
+      client_version,
+    ]
+  }
 }
 
 # ── Service Account ─────────────────────────────────────────
