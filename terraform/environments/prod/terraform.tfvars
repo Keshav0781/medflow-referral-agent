@@ -8,7 +8,7 @@ project_id    = "medflow-referral-agent"
 region        = "europe-west3"
 environment   = "prod"
 min_instances = 1
-max_instances = 20
+max_instances = 5
 memory        = "4Gi"
 cpu           = "2"
 
