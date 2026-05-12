@@ -36,6 +36,15 @@ resource "google_pubsub_subscription" "referral_documents_sub" {
     max_delivery_attempts = var.max_delivery_attempts
   }
 
+  # Push messages to Cloud Run webhook when endpoint is configured
+  # Empty string means pull subscription — used when Cloud Run URL not yet known
+  dynamic "push_config" {
+    for_each = var.push_endpoint != "" ? [1] : []
+    content {
+      push_endpoint = var.push_endpoint
+    }
+  }
+
   depends_on = [
     google_pubsub_topic.referral_documents,
     google_pubsub_topic.dead_letter

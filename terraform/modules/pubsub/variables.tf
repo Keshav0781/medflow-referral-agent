@@ -36,3 +36,8 @@ variable "max_delivery_attempts" {
   type        = number
   default     = 5
 }
+variable "push_endpoint" {
+  description = "Cloud Run webhook URL for push subscription — empty string means pull subscription"
+  type        = string
+  default     = ""
+}
