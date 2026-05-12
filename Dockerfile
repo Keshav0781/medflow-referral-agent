@@ -60,6 +60,11 @@ RUN chown -R medflow:medflow /app && chmod +x /app/startup.sh
 # Switch to non-root user
 USER medflow
 
+# Pre-bake ChromaDB data into image during build
+# Runs RAG ingestion so ChromaDB is ready when container starts
+# Avoids slow startup and timeout issues in Cloud Run
+RUN python -m src.rag.ingestion
+
 # Add local packages to PATH
 ENV PATH=/home/medflow/.local/bin:$PATH
 
