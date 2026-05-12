@@ -33,7 +33,7 @@ class Settings(BaseSettings):
         description="Vertex AI location"
     )
     vertex_ai_model: str = Field(
-        default="gemini-1.5-pro",
+        default="gemini-2.5-flash",
         description="Vertex AI model name"
     )
 

@@ -44,7 +44,7 @@ def test_settings_default_values():
         settings = settings_module.Settings()
         assert settings.gcp_region == "europe-west3"
         assert settings.vertex_ai_location == "europe-west3"
-        assert settings.vertex_ai_model == "gemini-1.5-pro"
+        assert settings.vertex_ai_model == "gemini-2.5-flash"
         assert settings.enable_bigquery is False
         assert settings.log_level == "INFO"
 
