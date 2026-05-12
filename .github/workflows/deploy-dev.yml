@@ -4,30 +4,27 @@
 # Builds Docker image, pushes to Artifact Registry,
 # deploys to Cloud Run dev environment
 # ============================================================
-
 name: Deploy — Dev
-
 on:
   push:
     branches:
       - main
-
 jobs:
   deploy-dev:
     name: Build and Deploy to Dev
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      id-token: write
     steps:
       # Step 1 — Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
-
       # Step 2 — Get commit SHA for image tagging
       # Never use latest — always tag with exact commit SHA
       - name: Get commit SHA
         id: sha
         run: echo "sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-
       # Step 3 — Authenticate with GCP
       # Uses Workload Identity Federation — no JSON key needed
       # More secure — short lived token per workflow run
@@ -36,19 +33,16 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-
       # Step 4 — Set up gcloud SDK
       - name: Set up gcloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-
       # Step 5 — Configure Docker to use gcloud credentials
       # Allows Docker to push to Artifact Registry
       - name: Configure Docker for Artifact Registry
         run: |
           gcloud auth configure-docker europe-west3-docker.pkg.dev
-
       # Step 6 — Build Docker image
       # Tagged with commit SHA — exact version tracked
       - name: Build Docker image
@@ -57,13 +51,11 @@ jobs:
             -t europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/medflow-repo/medflow-agent:${{ steps.sha.outputs.sha }} \
             -t europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/medflow-repo/medflow-agent:latest \
             .
-
       # Step 7 — Push Docker image to Artifact Registry
       - name: Push Docker image
         run: |
           docker push europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/medflow-repo/medflow-agent:${{ steps.sha.outputs.sha }}
           docker push europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/medflow-repo/medflow-agent:latest
-
       # Step 8 — Deploy to Cloud Run dev
       - name: Deploy to Cloud Run dev
         run: |
@@ -71,7 +63,6 @@ jobs:
             --image europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/medflow-repo/medflow-agent:${{ steps.sha.outputs.sha }} \
             --region europe-west3 \
             --project ${{ secrets.GCP_PROJECT_ID }}
-
       # Step 9 — Verify deployment health
       # Checks /health endpoint to confirm deployment succeeded
       - name: Verify deployment
@@ -82,14 +73,12 @@ jobs:
             --format 'value(status.url)')
           echo "Dev URL: $DEV_URL"
           curl --fail "$DEV_URL/health" || exit 1
-
       # Step 10 — Notify team on success
       - name: Notify deployment success
         if: success()
         run: |
           echo " Successfully deployed commit ${{ steps.sha.outputs.sha }} to dev"
           echo "Dev URL available in previous step output"
-
       # Step 11 — Notify team on failure
       - name: Notify deployment failure
         if: failure()
