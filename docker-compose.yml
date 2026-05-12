@@ -1,0 +1,79 @@
+# ============================================================
+# MedFlow Referral Agent - Docker Compose
+# Local development environment only
+# Never used in production — Cloud Run handles that
+# Starts:
+#   1. ChromaDB — vector database for RAG
+#   2. MedFlow Agent — FastAPI application
+# ============================================================
+
+version: '3.8'
+
+services:
+
+  # ── ChromaDB ─────────────────────────────────────────────
+  # Vector database for department and urgency RAG retrieval
+  # Persists data to local volume — survives container restarts
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: medflow-chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chromadb_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── MedFlow Agent ─────────────────────────────────────────
+  # FastAPI application — main service
+  # Depends on ChromaDB being healthy before starting
+  medflow-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medflow-agent
+    ports:
+      - "8080:8080"
+    environment:
+      # GCP settings — use your project ID
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID:-medflow-referral-agent}
+      - GCP_REGION=${GCP_REGION:-europe-west3}
+      - VERTEX_AI_LOCATION=${VERTEX_AI_LOCATION:-europe-west3}
+      # LangSmith observability
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-medflow-referral-agent}
+      # ChromaDB — points to local container
+      - CHROMA_PERSIST_DIR=/app/data/chroma
+      # BigQuery — disabled locally
+      - ENABLE_BIGQUERY=false
+      - BIGQUERY_DATASET=medflow_logs
+      - BIGQUERY_TABLE=referral_processing_logs
+      # Application settings
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+    volumes:
+      # Mount local chroma data directory
+      - ./data/chroma:/app/data/chroma
+      # Mount GCP credentials for local Vertex AI access
+      - ${HOME}/.config/gcloud:/home/medflow/.config/gcloud:ro
+    depends_on:
+      chromadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+# ── Volumes ───────────────────────────────────────────────────
+volumes:
+  chromadb_data:
+    driver: local
