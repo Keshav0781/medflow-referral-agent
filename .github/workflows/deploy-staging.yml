@@ -20,6 +20,9 @@ jobs:
   deploy-staging:
     name: Evaluate and Deploy to Staging
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
 
     # Only run if dev deployment succeeded
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
