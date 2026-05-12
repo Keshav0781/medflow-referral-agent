@@ -148,6 +148,7 @@ def _simulate_routing_decision(document_text: str) -> dict:
     text_lower = document_text.lower()
 
     # Simple keyword matching for evaluation
+    # Order matters — more specific checks before general ones
     if any(word in text_lower for word in
            ["chest pain", "ecg", "cardiac", "heart", "cardiology"]):
         return {"department": "Cardiology", "confidence": 0.92}
@@ -158,30 +159,33 @@ def _simulate_routing_decision(document_text: str) -> dict:
         return {"department": "Neurology", "confidence": 0.91}
 
     elif any(word in text_lower for word in
-             ["cancer", "tumour", "malignancy", "oncology", "shadow"]):
-        return {"department": "Oncology", "confidence": 0.88}
+             ["rheumatoid", "rf positive", "morning stiffness",
+              "autoimmune", "rheumatology"]):
+        return {"department": "Rheumatology", "confidence": 0.86}
 
     elif any(word in text_lower for word in
-             ["joint", "back pain", "bone", "fracture", "spine",
-              "disc", "orthopedic"]):
-        return {"department": "Orthopedics", "confidence": 0.89}
-
-    elif any(word in text_lower for word in
-             ["cough", "lung", "respiratory", "pulmonary", "sputum"]):
-        return {"department": "Pulmonology", "confidence": 0.87}
-
-    elif any(word in text_lower for word in
-             ["diabetes", "glucose", "insulin", "hba1c", "endocrin"]):
-        return {"department": "Endocrinology", "confidence": 0.90}
-
-    elif any(word in text_lower for word in
-             ["colonoscopy", "bowel", "stomach", "gastro", "abdominal"]):
+             ["colonoscopy", "colorectal", "bowel", "stomach",
+              "gastro", "abdominal", "colon"]):
         return {"department": "Gastroenterology", "confidence": 0.88}
 
     elif any(word in text_lower for word in
-             ["rheumatoid", "arthritis", "joint pain", "rf positive",
-              "autoimmune"]):
-        return {"department": "Rheumatology", "confidence": 0.86}
+             ["cough", "lung", "respiratory", "pulmonary", "sputum",
+              "blood-tinged"]):
+        return {"department": "Pulmonology", "confidence": 0.87}
+
+    elif any(word in text_lower for word in
+             ["diabetes", "glucose", "insulin", "hba1c", "endocrin",
+              "blood sugar", "polyuria"]):
+        return {"department": "Endocrinology", "confidence": 0.90}
+
+    elif any(word in text_lower for word in
+             ["back pain", "bone", "fracture", "spine", "disc",
+              "orthopedic", "l4", "l5"]):
+        return {"department": "Orthopedics", "confidence": 0.89}
+
+    elif any(word in text_lower for word in
+             ["cancer", "tumour", "malignancy", "oncology"]):
+        return {"department": "Oncology", "confidence": 0.88}
 
     else:
         return {"department": "Internal Medicine", "confidence": 0.60}
@@ -203,8 +207,10 @@ def _simulate_urgency_decision(document_text: str) -> dict:
 
     semi_urgent_keywords = [
         "ecg changes", "st changes", "blood-tinged", "weight loss",
-        "progressive", "suspicious", "worsening", "concerning",
-        "nerve compression", "persistently elevated"
+        "suspicious", "worsening", "concerning",
+        "nerve compression", "persistently elevated",
+        "severe joint pain", "swelling in multiple joints",
+        "rf positive"
     ]
 
     if any(keyword in text_lower for keyword in emergency_keywords):
