@@ -316,15 +316,55 @@ async def _log_to_bigquery(state: ReferralState):
 async def _log_coordinator_action(action: CoordinatorAction):
     """
     Logs coordinator action to BigQuery.
-    Updates the audit record with human decision.
+    Records human decision for clinical audit trail.
+    GDPR compliance — every coordinator decision must be logged.
     """
     try:
-        logger.info(
-            f"Coordinator action logged: {action.document_id} "
-            f"action: {action.action}"
+        if not settings.enable_bigquery:
+            logger.info(
+                f"BigQuery disabled — coordinator action not logged: "
+                f"{action.document_id} action: {action.action}"
+            )
+            return
+
+        from google.cloud import bigquery
+
+        client = bigquery.Client(project=settings.gcp_project_id)
+
+        table_id = (
+            f"{settings.gcp_project_id}."
+            f"{settings.bigquery_dataset}."
+            f"{settings.bigquery_table}"
         )
-        # In production — update BigQuery record
-        # with coordinator_action field
+
+        row = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "document_id": action.document_id,
+            "session_id": action.session_id,
+            "department": action.edited_department,
+            "urgency": action.edited_urgency,
+            "routing_confidence": None,
+            "routing_reason": None,
+            "urgency_confidence": None,
+            "urgency_reason": None,
+            "processing_time_seconds": None,
+            "escalation_triggered": None,
+            "langsmith_trace_id": None,
+            "coordinator_action": action.action,
+            "environment": settings.environment,
+        }
+
+        errors = client.insert_rows_json(table_id, [row])
+
+        if errors:
+            logger.error(
+                f"BigQuery coordinator action insert errors: {errors}"
+            )
+        else:
+            logger.info(
+                f"Coordinator action logged to BigQuery: "
+                f"{action.document_id} action: {action.action}"
+            )
 
     except Exception as e:
         logger.error(f"Failed to log coordinator action: {e}")
