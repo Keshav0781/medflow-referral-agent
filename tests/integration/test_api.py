@@ -53,17 +53,15 @@ def test_root_returns_200():
 
 
 def test_root_returns_service_name():
-    """Root endpoint must identify the service."""
+    """Root endpoint must serve the coordinator dashboard."""
     response = client.get("/")
-    data = response.json()
-    assert data["service"] == "MedFlow Referral Agent"
+    assert "MedFlow" in response.text
 
 
 def test_root_returns_running_status():
-    """Root endpoint must confirm service is running."""
+    """Root endpoint must serve HTML dashboard."""
     response = client.get("/")
-    data = response.json()
-    assert data["status"] == "running"
+    assert "text/html" in response.headers.get("content-type", "")
 
 
 # ── Pub/Sub Webhook Tests ─────────────────────────────────────

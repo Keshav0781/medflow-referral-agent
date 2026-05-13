@@ -13,10 +13,12 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
+from pathlib import Path
 from src.config.settings import get_settings
 from src.agent.graph import process_referral
 from src.agent.state import ReferralState
@@ -106,15 +108,52 @@ async def health_check():
     )
 
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    """Root endpoint — confirms service is running"""
-    return {
-        "service": "MedFlow Referral Agent",
-        "version": "1.0.0",
-        "status": "running",
-        "environment": settings.environment
-    }
+    """Root endpoint — serves coordinator dashboard"""
+    dashboard_path = Path(__file__).parent.parent / "dashboard" / "index.html"
+    if dashboard_path.exists():
+        return HTMLResponse(content=dashboard_path.read_text())
+    return HTMLResponse(content="<h1>MedFlow Referral Agent</h1><p>Dashboard not found</p>")
+
+
+@app.post("/upload")
+async def upload_referral(
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks()
+):
+    """
+    Uploads a referral PDF directly from the coordinator dashboard.
+    Saves to GCS bucket which triggers the agent pipeline via Pub/Sub.
+    """
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+
+    try:
+        from google.cloud import storage
+
+        file_content = await file.read()
+        document_id = f"REF-{uuid.uuid4().hex[:8].upper()}"
+        blob_name = f"{document_id}_{file.filename}"
+
+        client = storage.Client(project=settings.gcp_project_id)
+        bucket_name = f"medflow-referral-docs-{settings.environment}-{settings.gcp_project_id}"
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+        blob.upload_from_string(file_content, content_type="application/pdf")
+
+        logger.info(f"Uploaded referral PDF: {blob_name} — document_id: {document_id}")
+
+        return {
+            "status": "uploaded",
+            "document_id": document_id,
+            "filename": file.filename,
+            "message": "Document uploaded — AI processing started"
+        }
+
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/webhook/pubsub")

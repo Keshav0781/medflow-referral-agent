@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedFlow — Coordinator Dashboard</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        *{margin:0;padding:0;box-sizing:border-box}
+        :root{
+            --primary:#0f4c81;--primary-light:#1a6eb5;
+            --emergency:#dc2626;--emergency-bg:#fef2f2;--emergency-border:#fecaca;
+            --semi:#d97706;--semi-bg:#fffbeb;--semi-border:#fde68a;
+            --routine:#16a34a;--routine-bg:#f0fdf4;--routine-border:#bbf7d0;
+            --surface:#ffffff;--bg:#f1f5f9;--text:#0f172a;--muted:#64748b;
+            --border:#e2e8f0;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.08),0 4px 12px rgba(0,0,0,.04)
+        }
+        body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+        header{background:linear-gradient(135deg,#0f4c81 0%,#1a6eb5 50%,#0e7490 100%);padding:0 32px;height:64px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(15,76,129,.3)}
+        .header-left{display:flex;align-items:center;gap:16px}
+        .logo{width:36px;height:36px;background:rgba(255,255,255,.2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+        .header-title{color:white;font-size:18px;font-weight:700;letter-spacing:-.3px}
+        .header-sub{color:rgba(255,255,255,.65);font-size:12px;margin-top:1px}
+        .header-right{display:flex;align-items:center;gap:12px}
+        .env-pill{background:rgba(255,255,255,.15);color:white;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.05em}
+        .live-dot{width:8px;height:8px;background:#4ade80;border-radius:50%;animation:pulse 2s infinite}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+        .container{max-width:1280px;margin:0 auto;padding:28px 32px}
+        .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+        .stat-card{background:var(--surface);border-radius:var(--radius);padding:20px 24px;box-shadow:var(--shadow);border:1px solid var(--border);position:relative;overflow:hidden}
+        .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+        .stat-card.total::before{background:linear-gradient(90deg,#0f4c81,#0e7490)}
+        .stat-card.emergency::before{background:var(--emergency)}
+        .stat-card.semi::before{background:var(--semi)}
+        .stat-card.routine::before{background:var(--routine)}
+        .stat-icon{font-size:24px;margin-bottom:10px}
+        .stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:500}
+        .stat-value{font-size:32px;font-weight:700;margin-top:4px;letter-spacing:-1px}
+        .stat-card.emergency .stat-value{color:var(--emergency)}
+        .stat-card.semi .stat-value{color:var(--semi)}
+        .stat-card.routine .stat-value{color:var(--routine)}
+        .stat-card.total .stat-value{color:var(--primary)}
+        .main-grid{display:grid;grid-template-columns:340px 1fr;gap:20px}
+        .panel{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border)}
+        .panel-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+        .panel-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+        .panel-body{padding:24px}
+        .upload-zone{border:2px dashed #cbd5e0;border-radius:10px;padding:40px 24px;text-align:center;cursor:pointer;transition:all .2s;background:#fafbfc}
+        .upload-zone:hover{border-color:var(--primary-light);background:#f0f7ff}
+        .upload-zone.dragging{border-color:var(--primary);background:#e8f2ff}
+        .upload-icon{font-size:40px;margin-bottom:12px}
+        .upload-text{font-size:14px;color:var(--muted);line-height:1.6}
+        .upload-text strong{color:var(--primary)}
+        .upload-input{display:none}
+        .progress-section{margin-top:16px;display:none}
+        .progress-section.show{display:block}
+        .progress-label{font-size:12px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between}
+        .progress-track{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+        .progress-bar{height:100%;background:linear-gradient(90deg,var(--primary),#0e7490);border-radius:3px;width:0;transition:width .3s}
+        .processing-steps{margin-top:16px;display:none}
+        .processing-steps.show{display:block}
+        .step{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px;color:var(--muted)}
+        .step.active{color:var(--primary)}
+        .step.done{color:var(--routine)}
+        .step-dot{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0}
+        .step.active .step-dot{background:var(--primary);animation:pulse 1s infinite}
+        .step.done .step-dot{background:var(--routine)}
+        .referral-list{display:flex;flex-direction:column;gap:12px}
+        .referral-card{border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:box-shadow .2s}
+        .referral-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.1)}
+        .referral-card.emergency{border-left:4px solid var(--emergency)}
+        .referral-card.semi-urgent{border-left:4px solid var(--semi)}
+        .referral-card.routine{border-left:4px solid var(--routine)}
+        .referral-top{padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start}
+        .referral-id{font-weight:700;font-size:15px;font-family:monospace;letter-spacing:.5px}
+        .referral-time{font-size:11px;color:var(--muted);margin-top:2px}
+        .badge{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.03em}
+        .badge.emergency{background:var(--emergency-bg);color:var(--emergency);border:1px solid var(--emergency-border)}
+        .badge.semi-urgent{background:var(--semi-bg);color:var(--semi);border:1px solid var(--semi-border)}
+        .badge.routine{background:var(--routine-bg);color:var(--routine);border:1px solid var(--routine-border)}
+        .referral-meta{padding:0 20px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+        .meta-item .meta-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:500}
+        .meta-item .meta-value{font-size:14px;font-weight:600;margin-top:3px}
+        .confidence-track{height:3px;background:var(--border);border-radius:2px;margin-top:5px}
+        .confidence-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--primary),#0e7490)}
+        .referral-summary{margin:0 20px 16px;padding:12px 16px;background:#f8fafc;border-radius:8px;font-size:13px;color:#334155;line-height:1.7;border-left:3px solid var(--primary-light)}
+        .referral-actions{padding:12px 20px;background:#fafbfc;border-top:1px solid var(--border);display:flex;gap:8px}
+        .btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;display:flex;align-items:center;gap:6px}
+        .btn:hover{transform:translateY(-1px)}
+        .btn-approve{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0}
+        .btn-approve:hover{background:#16a34a;color:white}
+        .btn-edit{background:#fef9c3;color:#854d0e;border:1px solid #fde047}
+        .btn-edit:hover{background:#ca8a04;color:white}
+        .btn-reject{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+        .btn-reject:hover{background:#dc2626;color:white}
+        .btn-refresh{background:none;border:1px solid var(--border);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;color:var(--muted);font-family:inherit;transition:all .15s}
+        .btn-refresh:hover{background:var(--bg)}
+        .empty-state{text-align:center;padding:48px 24px;color:var(--muted)}
+        .empty-icon{font-size:48px;margin-bottom:12px;opacity:.5}
+        .empty-text{font-size:14px}
+        .toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:500;opacity:0;transform:translateY(8px);transition:all .3s;z-index:9999;max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,.15)}
+        .toast.success{background:#15803d;color:white;opacity:1;transform:translateY(0)}
+        .toast.error{background:#dc2626;color:white;opacity:1;transform:translateY(0)}
+        .toast.info{background:#0f4c81;color:white;opacity:1;transform:translateY(0)}
+        .approved-banner{background:var(--routine-bg);border:1px solid var(--routine-border);color:var(--routine);padding:8px 16px;border-radius:6px;font-size:12px;font-weight:500}
+    </style>
+</head>
+<body>
+<header>
+    <div class="header-left">
+        <div class="logo">🏥</div>
+        <div>
+            <div class="header-title">MedFlow Referral Agent</div>
+            <div class="header-sub">LMU Klinikum Munich — AI-Assisted Clinical Routing</div>
+        </div>
+    </div>
+    <div class="header-right">
+        <div class="live-dot"></div>
+        <div class="env-pill" id="env-pill">Loading...</div>
+    </div>
+</header>
+
+<div class="container">
+    <div class="stats-grid">
+        <div class="stat-card total">
+            <div class="stat-icon">📋</div>
+            <div class="stat-label">Total Processed</div>
+            <div class="stat-value" id="stat-total">—</div>
+        </div>
+        <div class="stat-card emergency">
+            <div class="stat-icon">🚨</div>
+            <div class="stat-label">Emergency</div>
+            <div class="stat-value" id="stat-emergency">—</div>
+        </div>
+        <div class="stat-card semi">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-label">Semi-urgent</div>
+            <div class="stat-value" id="stat-semi">—</div>
+        </div>
+        <div class="stat-card routine">
+            <div class="stat-icon">✅</div>
+            <div class="stat-label">Routine</div>
+            <div class="stat-value" id="stat-routine">—</div>
+        </div>
+    </div>
+
+    <div class="main-grid">
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">📤 Upload Referral</div>
+            </div>
+            <div class="panel-body">
+                <div class="upload-zone" id="upload-zone"
+                     onclick="document.getElementById('file-input').click()"
+                     ondragover="handleDragOver(event)"
+                     ondrop="handleDrop(event)"
+                     ondragleave="handleDragLeave(event)">
+                    <input type="file" id="file-input" class="upload-input" accept=".pdf" onchange="handleFileSelect(event)">
+                    <div class="upload-icon">📄</div>
+                    <div class="upload-text">
+                        <strong>Click to upload</strong> or drag & drop<br>
+                        PDF referral documents only
+                    </div>
+                </div>
+
+                <div class="progress-section" id="progress-section">
+                    <div class="progress-label">
+                        <span id="progress-text">Uploading...</span>
+                        <span id="progress-pct">0%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-bar" id="progress-bar"></div>
+                    </div>
+                </div>
+
+                <div class="processing-steps" id="processing-steps">
+                    <div class="step" id="step-upload">
+                        <div class="step-dot"></div>Upload complete
+                    </div>
+                    <div class="step" id="step-extract">
+                        <div class="step-dot"></div>Extracting text
+                    </div>
+                    <div class="step" id="step-route">
+                        <div class="step-dot"></div>Routing to department
+                    </div>
+                    <div class="step" id="step-urgency">
+                        <div class="step-dot"></div>Classifying urgency
+                    </div>
+                    <div class="step" id="step-summary">
+                        <div class="step-dot"></div>Generating summary
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">📋 Pending Referrals</div>
+                <button class="btn-refresh" onclick="loadReferrals()">↻ Refresh</button>
+            </div>
+            <div class="panel-body">
+                <div class="referral-list" id="referral-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <div class="empty-text">Loading referrals...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = window.location.origin;
+
+async function loadReferrals() {
+    try {
+        const res = await fetch(`${API}/referrals`);
+        if (!res.ok) throw new Error("Failed");
+        const data = await res.json();
+        renderReferrals(data.referrals);
+        updateStats(data.referrals);
+        // Set env badge
+        if (data.referrals.length > 0) {
+            document.getElementById("env-pill").textContent = data.referrals[0].environment || "dev";
+        }
+    } catch(e) {
+        document.getElementById("referral-list").innerHTML =
+            '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Unable to load referrals</div></div>';
+    }
+}
+
+function updateStats(referrals) {
+    document.getElementById("stat-total").textContent = referrals.length;
+    document.getElementById("stat-emergency").textContent = referrals.filter(r=>r.urgency==="Emergency").length;
+    document.getElementById("stat-semi").textContent = referrals.filter(r=>r.urgency==="Semi-urgent").length;
+    document.getElementById("stat-routine").textContent = referrals.filter(r=>r.urgency==="Routine").length;
+}
+
+function formatTime(ts) {
+    if (!ts) return "—";
+    const d = new Date(ts);
+    return d.toLocaleString("de-DE", {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+}
+
+function renderReferrals(referrals) {
+    const list = document.getElementById("referral-list");
+    if (!referrals.length) {
+        list.innerHTML = '<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">No pending referrals.<br>Upload a document to get started.</div></div>';
+        return;
+    }
+    list.innerHTML = referrals.map(r => {
+        const urgencyClass = r.urgency ? r.urgency.toLowerCase().replace(" ","-") : "";
+        const conf = r.routing_confidence ? Math.round(r.routing_confidence*100) : 0;
+        const urgConf = r.urgency_confidence ? Math.round(r.urgency_confidence*100) : 0;
+        return `
+        <div class="referral-card ${urgencyClass}">
+            <div class="referral-top">
+                <div>
+                    <div class="referral-id">${r.document_id}</div>
+                    <div class="referral-time">${formatTime(r.timestamp)}</div>
+                </div>
+                <span class="badge ${urgencyClass}">${r.urgency||"Unknown"}</span>
+            </div>
+            <div class="referral-meta">
+                <div class="meta-item">
+                    <div class="meta-label">Department</div>
+                    <div class="meta-value">${r.department||"—"}</div>
+                    <div class="confidence-track"><div class="confidence-fill" style="width:${conf}%"></div></div>
+                    <div style="font-size:10px;color:var(--muted);margin-top:2px">${conf}% confidence</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Urgency Confidence</div>
+                    <div class="meta-value">${urgConf}%</div>
+                    <div class="confidence-track"><div class="confidence-fill" style="width:${urgConf}%"></div></div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Processing Time</div>
+                    <div class="meta-value">${r.processing_time_seconds?r.processing_time_seconds.toFixed(1)+"s":"—"}</div>
+                    ${r.escalation_triggered?'<div style="color:var(--emergency);font-size:11px;margin-top:4px">🚨 Escalation triggered</div>':""}
+                </div>
+            </div>
+            ${r.summary?`<div class="referral-summary">${r.summary}</div>`:""}
+            <div class="referral-actions">
+                <button class="btn btn-approve" onclick="action('${r.document_id}','approved')">✓ Approve</button>
+                <button class="btn btn-edit" onclick="action('${r.document_id}','edited')">✎ Edit & Approve</button>
+                <button class="btn btn-reject" onclick="action('${r.document_id}','rejected')">✗ Reject</button>
+            </div>
+        </div>`;
+    }).join("");
+}
+
+async function action(docId, act) {
+    try {
+        const res = await fetch(`${API}/coordinator/action`, {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({
+                document_id: docId,
+                session_id: "dashboard-" + Date.now(),
+                action: act,
+                coordinator_id: "coordinator@lmu-klinikum.de"
+            })
+        });
+        if (res.ok) {
+            showToast(`Referral ${act} successfully`, "success");
+            setTimeout(loadReferrals, 1500);
+        }
+    } catch(e) { showToast("Error recording action","error"); }
+}
+
+function handleFileSelect(e) { uploadFile(e.target.files[0]); }
+function handleDragOver(e) { e.preventDefault(); document.getElementById("upload-zone").classList.add("dragging"); }
+function handleDragLeave(e) { document.getElementById("upload-zone").classList.remove("dragging"); }
+function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById("upload-zone").classList.remove("dragging");
+    uploadFile(e.dataTransfer.files[0]);
+}
+
+async function uploadFile(file) {
+    if (!file) return;
+    if (!file.name.endsWith(".pdf")) { showToast("Please upload a PDF file","error"); return; }
+
+    const progress = document.getElementById("progress-section");
+    const bar = document.getElementById("progress-bar");
+    const pct = document.getElementById("progress-pct");
+    const steps = document.getElementById("processing-steps");
+    progress.classList.add("show");
+    steps.classList.add("show");
+
+    // Animate progress
+    let p = 0;
+    const interval = setInterval(() => {
+        p = Math.min(p + 5, 90);
+        bar.style.width = p + "%";
+        pct.textContent = p + "%";
+        if (p >= 30) setStep("step-upload","done");
+        if (p >= 50) setStep("step-extract","done");
+        if (p >= 65) setStep("step-route","active");
+        if (p >= 75) { setStep("step-route","done"); setStep("step-urgency","active"); }
+        if (p >= 85) { setStep("step-urgency","done"); setStep("step-summary","active"); }
+    }, 400);
+
+    try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch(`${API}/upload`, {method:"POST", body:formData});
+        clearInterval(interval);
+        bar.style.width = "100%"; pct.textContent = "100%";
+        setStep("step-summary","done");
+        if (res.ok) {
+            showToast("Document uploaded — AI processing started","info");
+            setTimeout(() => { progress.classList.remove("show"); steps.classList.remove("show"); resetSteps(); }, 2000);
+            setTimeout(loadReferrals, 8000);
+        } else {
+            showToast("Upload failed","error");
+            progress.classList.remove("show"); steps.classList.remove("show"); resetSteps();
+        }
+    } catch(e) {
+        clearInterval(interval);
+        showToast("Upload error — check connection","error");
+        progress.classList.remove("show"); steps.classList.remove("show"); resetSteps();
+    }
+    document.getElementById("file-input").value = "";
+}
+
+function setStep(id, state) {
+    const el = document.getElementById(id);
+    el.className = "step " + state;
+}
+function resetSteps() {
+    ["step-upload","step-extract","step-route","step-urgency","step-summary"].forEach(id => {
+        document.getElementById(id).className = "step";
+    });
+}
+
+function showToast(msg, type="info") {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "toast " + type;
+    setTimeout(() => { t.className = "toast"; }, 3500);
+}
+
+loadReferrals();
+setInterval(loadReferrals, 30000);
+</script>
+</body>
+</html>
