@@ -67,13 +67,8 @@ resource "google_cloud_run_v2_service" "medflow_agent" {
       }
 
       env {
-        name = "BIGQUERY_DATASET"
-        value_source {
-          secret_key_ref {
-            secret  = "BIGQUERY-DATASET"
-            version = "latest"
-          }
-        }
+        name  = "BIGQUERY_DATASET"
+        value = "medflow_logs_${var.environment}"
       }
 
       env {
