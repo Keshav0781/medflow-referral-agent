@@ -53,17 +53,15 @@ def test_root_returns_200():
 
 
 def test_root_returns_service_name():
-    """Root endpoint must identify the service."""
+    """Root endpoint must serve the coordinator dashboard."""
     response = client.get("/")
-    data = response.json()
-    assert data["service"] == "MedFlow Referral Agent"
+    assert "MedFlow" in response.text
 
 
 def test_root_returns_running_status():
-    """Root endpoint must confirm service is running."""
+    """Root endpoint must serve HTML dashboard."""
     response = client.get("/")
-    data = response.json()
-    assert data["status"] == "running"
+    assert "text/html" in response.headers.get("content-type", "")
 
 
 # ── Pub/Sub Webhook Tests ─────────────────────────────────────
@@ -211,12 +209,46 @@ def test_coordinator_action_returns_timestamp():
 
 def test_get_referral_status_returns_200():
     """Referral status endpoint must return 200."""
-    response = client.get("/referral/REF-12345678")
+    mock_row = {
+        "document_id": "REF-12345678",
+        "department": "Cardiology",
+        "urgency": "Semi-urgent",
+        "routing_confidence": 0.98,
+        "routing_reason": "Chest pain with ECG changes",
+        "urgency_confidence": 0.95,
+        "urgency_reason": "Stable but concerning",
+        "summary": "Patient with chest pain referred to Cardiology",
+        "processing_time_seconds": 47.5,
+        "escalation_triggered": False,
+        "coordinator_action": None,
+        "timestamp": None,
+        "environment": "test"
+    }
+    with patch("google.cloud.bigquery.Client") as mock_bq_client:
+        mock_bq_client.return_value.query.return_value.result.return_value = [mock_row]
+        response = client.get("/referral/REF-12345678")
     assert response.status_code == 200
 
 
 def test_get_referral_status_returns_document_id():
     """Referral status must echo back the document_id."""
-    response = client.get("/referral/REF-12345678")
+    mock_row = {
+        "document_id": "REF-12345678",
+        "department": "Cardiology",
+        "urgency": "Semi-urgent",
+        "routing_confidence": 0.98,
+        "routing_reason": "Chest pain with ECG changes",
+        "urgency_confidence": 0.95,
+        "urgency_reason": "Stable but concerning",
+        "summary": "Patient with chest pain referred to Cardiology",
+        "processing_time_seconds": 47.5,
+        "escalation_triggered": False,
+        "coordinator_action": None,
+        "timestamp": None,
+        "environment": "test"
+    }
+    with patch("google.cloud.bigquery.Client") as mock_bq_client:
+        mock_bq_client.return_value.query.return_value.result.return_value = [mock_row]
+        response = client.get("/referral/REF-12345678")
     data = response.json()
     assert data["document_id"] == "REF-12345678"

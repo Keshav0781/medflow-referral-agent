@@ -13,10 +13,12 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
+from pathlib import Path
 from src.config.settings import get_settings
 from src.agent.graph import process_referral
 from src.agent.state import ReferralState
@@ -106,15 +108,52 @@ async def health_check():
     )
 
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    """Root endpoint — confirms service is running"""
-    return {
-        "service": "MedFlow Referral Agent",
-        "version": "1.0.0",
-        "status": "running",
-        "environment": settings.environment
-    }
+    """Root endpoint — serves coordinator dashboard"""
+    dashboard_path = Path(__file__).parent.parent / "dashboard" / "index.html"
+    if dashboard_path.exists():
+        return HTMLResponse(content=dashboard_path.read_text())
+    return HTMLResponse(content="<h1>MedFlow Referral Agent</h1><p>Dashboard not found</p>")
+
+
+@app.post("/upload")
+async def upload_referral(
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks()
+):
+    """
+    Uploads a referral PDF directly from the coordinator dashboard.
+    Saves to GCS bucket which triggers the agent pipeline via Pub/Sub.
+    """
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+
+    try:
+        from google.cloud import storage
+
+        file_content = await file.read()
+        document_id = f"REF-{uuid.uuid4().hex[:8].upper()}"
+        blob_name = f"{document_id}_{file.filename}"
+
+        client = storage.Client(project=settings.gcp_project_id)
+        bucket_name = f"medflow-referral-docs-{settings.environment}-{settings.gcp_project_id}"
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+        blob.upload_from_string(file_content, content_type="application/pdf")
+
+        logger.info(f"Uploaded referral PDF: {blob_name} — document_id: {document_id}")
+
+        return {
+            "status": "uploaded",
+            "document_id": document_id,
+            "filename": file.filename,
+            "message": "Document uploaded — AI processing started"
+        }
+
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/webhook/pubsub")
@@ -219,14 +258,94 @@ async def get_referral_status(document_id: str):
     """
     Returns current processing status of a referral.
     Called by coordinator dashboard to check results.
+    Fetches real data from BigQuery audit log.
     """
-    # In production — fetch from database
-    # For now — return placeholder
-    return {
-        "document_id": document_id,
-        "status": "processed",
-        "message": "Check platform database for full results"
-    }
+    try:
+        from google.cloud import bigquery
+        client = bigquery.Client(project=settings.gcp_project_id)
+
+        query = f"""
+            SELECT
+                document_id, department, urgency,
+                routing_confidence, routing_reason,
+                urgency_confidence, urgency_reason,
+                summary, processing_time_seconds,
+                escalation_triggered, coordinator_action,
+                timestamp, environment
+            FROM `{settings.gcp_project_id}.{settings.bigquery_dataset}.{settings.bigquery_table}`
+            WHERE document_id = @document_id
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """
+
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("document_id", "STRING", document_id)
+            ]
+        )
+
+        results = list(client.query(query, job_config=job_config).result())
+
+        if not results:
+            raise HTTPException(status_code=404, detail=f"Referral {document_id} not found")
+
+        row = dict(results[0])
+        row["timestamp"] = row["timestamp"].isoformat() if row.get("timestamp") else None
+
+        return {
+            "status": "processed",
+            **row
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching referral status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/referrals")
+async def list_referrals(limit: int = 20):
+    """
+    Returns list of recently processed referrals.
+    Called by coordinator dashboard to show all referrals.
+    """
+    try:
+        from google.cloud import bigquery
+        client = bigquery.Client(project=settings.gcp_project_id)
+
+        query = f"""
+            SELECT
+                document_id, department, urgency,
+                routing_confidence, urgency_confidence,
+                summary, processing_time_seconds,
+                escalation_triggered, coordinator_action,
+                timestamp
+            FROM `{settings.gcp_project_id}.{settings.bigquery_dataset}.{settings.bigquery_table}`
+            WHERE coordinator_action IS NULL
+            ORDER BY timestamp DESC
+            LIMIT @limit
+        """
+
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("limit", "INT64", limit)
+            ]
+        )
+
+        results = list(client.query(query, job_config=job_config).result())
+
+        referrals = []
+        for row in results:
+            r = dict(row)
+            r["timestamp"] = r["timestamp"].isoformat() if r.get("timestamp") else None
+            referrals.append(r)
+
+        return {"referrals": referrals, "count": len(referrals)}
+
+    except Exception as e:
+        logger.error(f"Error listing referrals: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Background Tasks ──────────────────────────────────────────
@@ -299,6 +418,7 @@ async def _log_to_bigquery(state: ReferralState):
             "processing_time_seconds": state.get("processing_time_seconds"),
             "escalation_triggered": state.get("escalation_triggered"),
             "langsmith_trace_id": state.get("langsmith_trace_id"),
+            "summary": state.get("summary"),
             "environment": settings.environment
         }
 
