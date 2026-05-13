@@ -67,7 +67,7 @@ class Settings(BaseSettings):
         description="BigQuery table name"
     )
     enable_bigquery: bool = Field(
-        default=False,
+        default=True,
         description="Enable BigQuery audit logging"
     )
 
