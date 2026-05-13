@@ -260,13 +260,20 @@ Rules:
 
     response_text = response.text.strip()
 
-    # Clean markdown if present
+    # Extract JSON object robustly — handles markdown blocks and
+    # chain-of-thought reasoning text before/after the JSON
     if "```json" in response_text:
         response_text = response_text.split("```json")[1].split("```")[0]
     elif "```" in response_text:
         response_text = response_text.split("```")[1].split("```")[0]
+    else:
+        # Extract first complete JSON object from response
+        start = response_text.find("{")
+        end = response_text.rfind("}") + 1
+        if start != -1 and end > start:
+            response_text = response_text[start:end]
 
-    result = json.loads(response_text)
+    result = json.loads(response_text.strip())
 
     # Validate required fields
     required_fields = ["urgency", "confidence", "reason"]
