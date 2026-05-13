@@ -29,13 +29,13 @@ jobs:
       # Uses Workload Identity Federation — no JSON key needed
       # More secure — short lived token per workflow run
       - name: Authenticate with GCP
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
       # Step 4 — Set up gcloud SDK
       - name: Set up gcloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
       # Step 5 — Configure Docker to use gcloud credentials
