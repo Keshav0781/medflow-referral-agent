@@ -219,14 +219,94 @@ async def get_referral_status(document_id: str):
     """
     Returns current processing status of a referral.
     Called by coordinator dashboard to check results.
+    Fetches real data from BigQuery audit log.
     """
-    # In production — fetch from database
-    # For now — return placeholder
-    return {
-        "document_id": document_id,
-        "status": "processed",
-        "message": "Check platform database for full results"
-    }
+    try:
+        from google.cloud import bigquery
+        client = bigquery.Client(project=settings.gcp_project_id)
+
+        query = f"""
+            SELECT
+                document_id, department, urgency,
+                routing_confidence, routing_reason,
+                urgency_confidence, urgency_reason,
+                summary, processing_time_seconds,
+                escalation_triggered, coordinator_action,
+                timestamp, environment
+            FROM `{settings.gcp_project_id}.{settings.bigquery_dataset}.{settings.bigquery_table}`
+            WHERE document_id = @document_id
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """
+
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("document_id", "STRING", document_id)
+            ]
+        )
+
+        results = list(client.query(query, job_config=job_config).result())
+
+        if not results:
+            raise HTTPException(status_code=404, detail=f"Referral {document_id} not found")
+
+        row = dict(results[0])
+        row["timestamp"] = row["timestamp"].isoformat() if row.get("timestamp") else None
+
+        return {
+            "status": "processed",
+            **row
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching referral status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/referrals")
+async def list_referrals(limit: int = 20):
+    """
+    Returns list of recently processed referrals.
+    Called by coordinator dashboard to show all referrals.
+    """
+    try:
+        from google.cloud import bigquery
+        client = bigquery.Client(project=settings.gcp_project_id)
+
+        query = f"""
+            SELECT
+                document_id, department, urgency,
+                routing_confidence, urgency_confidence,
+                summary, processing_time_seconds,
+                escalation_triggered, coordinator_action,
+                timestamp
+            FROM `{settings.gcp_project_id}.{settings.bigquery_dataset}.{settings.bigquery_table}`
+            WHERE coordinator_action IS NULL
+            ORDER BY timestamp DESC
+            LIMIT @limit
+        """
+
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("limit", "INT64", limit)
+            ]
+        )
+
+        results = list(client.query(query, job_config=job_config).result())
+
+        referrals = []
+        for row in results:
+            r = dict(row)
+            r["timestamp"] = r["timestamp"].isoformat() if r.get("timestamp") else None
+            referrals.append(r)
+
+        return {"referrals": referrals, "count": len(referrals)}
+
+    except Exception as e:
+        logger.error(f"Error listing referrals: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Background Tasks ──────────────────────────────────────────
@@ -299,6 +379,7 @@ async def _log_to_bigquery(state: ReferralState):
             "processing_time_seconds": state.get("processing_time_seconds"),
             "escalation_triggered": state.get("escalation_triggered"),
             "langsmith_trace_id": state.get("langsmith_trace_id"),
+            "summary": state.get("summary"),
             "environment": settings.environment
         }
 

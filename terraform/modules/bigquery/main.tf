@@ -119,6 +119,12 @@ resource "google_bigquery_table" "referral_logs" {
       description = "LangSmith trace ID for debugging"
     },
     {
+      name        = "summary"
+      type        = "STRING"
+      mode        = "NULLABLE"
+      description = "AI generated summary of the referral for the receiving department"
+    },
+    {
       name        = "environment"
       type        = "STRING"
       mode        = "REQUIRED"
