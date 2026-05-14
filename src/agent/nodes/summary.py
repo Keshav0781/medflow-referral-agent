@@ -133,7 +133,7 @@ Write the summary directly — no introduction or preamble."""
         contents=prompt,
         config=types.GenerateContentConfig(
             temperature=0.3,
-            max_output_tokens=1000,
+            max_output_tokens=3000,
         )
     )
 
