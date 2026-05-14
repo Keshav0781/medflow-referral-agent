@@ -1,32 +1,35 @@
 # MedFlow Referral Agent
 
-Production-grade multi-agent AI system for automated clinical 
-referral processing — built with LangGraph, Vertex AI, 
-LangSmith, and Ragas on GCP.
+Production-grade multi-agent AI system for automated clinical referral processing — built with LangGraph, Gemini, ChromaDB, and Ragas on GCP.
+
+**Live Demo (no login required):**
+
+| Environment | URL |
+|---|---|
+| Dev | https://medflow-referral-agent-dev-togzrymjsq-ey.a.run.app |
+| Staging | https://medflow-referral-agent-staging-togzrymjsq-ey.a.run.app |
+| Production | https://medflow-referral-agent-prod-togzrymjsq-ey.a.run.app |
+
+Open any URL, upload a referral PDF, and the system will automatically route it to the correct department, classify urgency, and generate a clinical summary. The coordinator can then Approve, Edit, or Reject the AI recommendation directly from the dashboard.
 
 ---
 
 ## Business Problem
 
-Hospital clinical coordinators manually process 80-100 patient 
-referral documents every day. Each document requires three 
-decisions — department routing, urgency classification, and 
-summary generation. This takes 4.2 hours on average per day.
-Mistakes on urgency classification have caused real patient harm.
+Hospital clinical coordinators manually process 80–100 patient referral documents every day. Each document requires three decisions — department routing, urgency classification, and summary generation. This takes 4.2 hours on average per day. Mistakes on urgency classification have caused real patient harm.
 
 ## What This System Does
 
-Automatically processes incoming patient referral documents and:
+Automatically processes incoming patient referral PDFs and:
 
-1. Extracts text from PDF referral documents
-2. Determines the correct hospital department
-3. Classifies urgency — Routine, Semi-urgent, or Emergency
-4. Generates a structured summary for the receiving department
-5. Immediately notifies on-call staff for Emergency cases
-6. Presents all recommendations to coordinator for approval
+1. Extracts text from the PDF
+2. Determines the correct hospital department using RAG
+3. Classifies urgency — Routine, Semi-urgent, or Emergency — using RAG
+4. Generates a structured clinical summary for the receiving department
+5. Immediately escalates Emergency cases
+6. Presents all recommendations to the coordinator for review
 
-The coordinator reviews and approves all decisions before 
-anything is written to the platform. AI assists — never decides.
+The coordinator reviews every decision before any action is taken. AI assists — never decides.
 
 ---
 
@@ -34,13 +37,12 @@ anything is written to the platform. AI assists — never decides.
 
 | Component | Technology |
 |---|---|
-| Agent Orchestration | LangGraph |
-| Language Model | Vertex AI Gemini 1.5 Pro |
-| Vector Database (dev) | ChromaDB |
-| Vector Database (prod) | Vertex AI Vector Search |
-| Observability | LangSmith |
+| Agent Orchestration | LangGraph 1.1.10 |
+| Language Model | gemini-2.5-flash (google-genai SDK) |
+| Vector Database | ChromaDB 1.5.9 (pre-baked into Docker image) |
 | Evaluation | Ragas |
-| API Framework | FastAPI |
+| API Framework | FastAPI 0.136 |
+| PDF Extraction | PyMuPDF |
 | Cloud Platform | GCP |
 | Deployment | Cloud Run |
 | Event Trigger | Cloud Pub/Sub |
@@ -53,32 +55,48 @@ anything is written to the platform. AI assists — never decides.
 ## Architecture
 
 ```
-Referral PDF uploaded to platform
+Referral PDF uploaded via dashboard or GCS bucket
 ↓
 Cloud Storage receives file
 ↓
 Cloud Pub/Sub triggers event
 ↓
-FastAPI receives event (Cloud Run)
+FastAPI webhook receives event (Cloud Run)
 ↓
-LangGraph Agent starts processing
+LangGraph pipeline starts — 5 nodes:
 ↓
-Node 1 — Extract text from PDF (PyMuPDF)
+Node 1 — Extract text from PDF (PyMuPDF, no LLM)
 ↓
-Node 2 — Route to department (Gemini Pro + RAG)
+Node 2 — Route to department (ChromaDB RAG + gemini-2.5-flash)
 ↓
-Node 3 — Classify urgency (Gemini Pro + RAG)
+Node 3 — Classify urgency (ChromaDB RAG + gemini-2.5-flash)
 ↓
-Node 4 — Check escalation (Emergency alert if needed)
+Node 4 — Check escalation (Emergency alert, no LLM)
 ↓
-Node 5 — Generate summary (Gemini Pro)
+Node 5 — Generate clinical summary (gemini-2.5-flash)
 ↓
-Node 6 — Present to coordinator for approval
+Results presented to coordinator on dashboard
 ↓
-Node 7 — Write back to platform via REST API
+Coordinator clicks Approve / Edit / Reject
 ↓
-Node 8 — Audit log to BigQuery (async)
+Action logged to BigQuery (full audit trail)
 ```
+
+Processing time: ~40–48 seconds per document (target: under 90 seconds).
+
+---
+
+## Coordinator Dashboard
+
+The dashboard at the root URL (`/`) gives the coordinator full control:
+
+- **Stats cards** — total processed, emergency, semi-urgent, routine counts
+- **Referral cards** — urgency colour coded, confidence score bars, AI summary
+- **Approve** — accepts AI recommendation, removes from pending list, logs to BigQuery
+- **Edit** — opens modal, coordinator changes department and/or urgency, confirms, logs edited values to BigQuery
+- **Reject** — rejects referral, removes from pending list, logs to BigQuery
+- **Drag and drop upload** — coordinator can upload PDFs directly from the dashboard
+- **Auto-refresh** — every 30 seconds
 
 ---
 
@@ -86,20 +104,20 @@ Node 8 — Audit log to BigQuery (async)
 
 | Environment | Purpose | Deployment |
 |---|---|---|
-| Local | Development on Mac | `python -m src.api.main` |
-| Dev | Shared team testing | Auto on merge to main |
-| Staging | Pre-production testing | Auto after dev succeeds + Ragas gate |
-| Production | Live system | Manual approval required — promote verified staging image |
+| Dev | Testing after every merge | Auto on merge to main |
+| Staging | Pre-production gate | Auto after dev — requires Ragas accuracy gate to pass |
+| Production | Live system | Manual trigger + manual approval in GitHub Actions |
+
+All three environments use isolated GCP resources — separate BigQuery datasets, Cloud Storage buckets, and Pub/Sub topics.
 
 ---
 
 ## Local Setup
 
 ### Prerequisites
-- Python 3.13
+- Python 3.11 or 3.13
 - Docker
-- GCP account with medflow-referral-agent project access
-- LangSmith account
+- GCP account with `medflow-referral-agent` project access
 
 ### Steps
 
@@ -124,12 +142,10 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 # Edit .env and fill in your real values
-# Get values from GCP Secret Manager or team lead
 ```
 
 **5. Authenticate with GCP**
 ```bash
-export PATH=$PATH:/opt/homebrew/bin
 gcloud auth login
 gcloud config set project medflow-referral-agent
 gcloud auth application-default login --scopes="https://www.googleapis.com/auth/cloud-platform"
@@ -165,16 +181,22 @@ pytest tests/unit/
 pytest tests/integration/
 ```
 
+43 tests total — unit and integration. BigQuery is mocked in integration tests.
+
 ---
 
-## Running Evaluation
+## Evaluation
 
 ```bash
 pytest src/evaluation/ragas_eval.py
 ```
 
-Evaluation runs automatically in CI/CD before 
-every staging deployment.
+Runs automatically in CI/CD before every staging deployment. Blocks deployment if accuracy is below threshold.
+
+| Metric | Threshold |
+|---|---|
+| Routing accuracy | 90% |
+| Urgency accuracy | 95% |
 
 ---
 
@@ -182,50 +204,56 @@ every staging deployment.
 
 ```
 medflow-referral-agent/
-│
-├── .github/workflows/    # CI/CD pipeline files
+├── .github/workflows/
+│   ├── ci.yml                 # Runs 43 tests on every push
+│   ├── deploy-dev.yml         # Auto deploy on merge to main
+│   ├── deploy-staging.yml     # Ragas gate then deploy
+│   └── deploy-prod.yml        # Manual trigger + manual approval
 ├── src/
-│   ├── agent/            # LangGraph agent
-│   │   ├── nodes/        # Individual agent nodes
-│   │   ├── graph.py      # Agent graph definition
-│   │   └── state.py      # Shared state definition
-│   ├── api/              # FastAPI application
-│   ├── rag/              # RAG components
-│   ├── evaluation/       # Ragas evaluation
-│   └── config/           # Application settings
+│   ├── agent/
+│   │   ├── nodes/             # 5 agent nodes
+│   │   ├── graph.py           # LangGraph graph definition
+│   │   └── state.py           # ReferralState TypedDict
+│   ├── api/main.py            # FastAPI app — webhook, coordinator actions, dashboard
+│   ├── config/settings.py     # Pydantic v2 settings
+│   ├── dashboard/index.html   # Coordinator dashboard UI
+│   ├── evaluation/            # Ragas evaluation pipeline
+│   └── rag/ingestion.py       # ChromaDB ingestion — runs during Docker build
 ├── tests/
-│   ├── unit/             # Unit tests
-│   └── integration/      # Integration tests
-├── terraform/            # Infrastructure as code
-│   ├── environments/     # Dev, staging, prod configs
-│   └── modules/          # Reusable Terraform modules
-├── docs/                 # Project documentation
-├── .env.example          # Environment variables template
-├── requirements.txt      # Python dependencies
-└── Dockerfile            # Container definition
+│   ├── unit/                  # 26 unit tests
+│   └── integration/           # 17 integration tests
+├── terraform/
+│   ├── environments/          # Dev, staging, prod configs
+│   └── modules/               # Cloud Run, Pub/Sub, BigQuery, Storage
+├── startup.sh                 # Starts uvicorn
+├── Dockerfile                 # Multi-stage, ChromaDB pre-baked
+├── docker-compose.yml         # Local dev
+├── requirements.txt
+└── .env.example
 ```
 
 ---
 
-## Branching Strategy
+## Git Workflow
 
-- `main` — production ready code always
-- `feature/xxx` — new features
-- `fix/xxx` — bug fixes
-- `chore/xxx` — maintenance
+Never push directly to main. Always:
 
-Never push directly to main. Always through Pull Request.
+```
+feature branch → PR → CI passes → merge → delete remote branch → git pull origin main → git branch -d local
+```
+
+Production deployments: GitHub Actions → Deploy Production → Run workflow → enter verified staging image SHA → approve gate.
 
 ---
 
 ## Commit Convention
 
 ```
-feat: new feature
-fix: bug fix
-docs: documentation change
+feat:  new feature
+fix:   bug fix
+docs:  documentation change
 chore: maintenance task
-test: adding tests
+test:  adding tests
 ```
 
 ---
@@ -235,9 +263,8 @@ test: adding tests
 | Metric | Target |
 |---|---|
 | Processing time | Under 90 seconds per document |
-| Routing accuracy | Above 90% |
-| Urgency accuracy | Above 95% |
-| Coordinator override rate | Below 15% after 4 weeks |
+| Routing accuracy threshold | 90% |
+| Urgency accuracy threshold | 95% |
 | System availability | 99.5% uptime |
 
 ---
@@ -245,4 +272,6 @@ test: adding tests
 ## Author
 
 Keshav Jha — M.Sc. Data Science, FAU Erlangen-Nuremberg  
-Target Role: AI Engineer — Germany
+ex-Accenture Senior Analyst | Working Student, Siemens Healthineers AI Team  
+Target Role: AI Engineer — Germany  
+GitHub: https://github.com/Keshav0781
