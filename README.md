@@ -10,7 +10,31 @@ Production-grade multi-agent AI system for automated clinical referral processin
 | Staging | https://medflow-referral-agent-staging-togzrymjsq-ey.a.run.app |
 | Production | https://medflow-referral-agent-prod-togzrymjsq-ey.a.run.app |
 
-Open any URL, upload a referral PDF, and the system will automatically route it to the correct department, classify urgency, and generate a clinical summary. The coordinator can then Approve, Edit, or Reject the AI recommendation directly from the dashboard.
+Open any URL, upload a referral PDF, and the system will automatically
+route it to the correct department, classify urgency, and generate a
+clinical summary. The coordinator can then Approve, Edit, or Reject
+the AI recommendation directly from the dashboard.
+
+**After uploading, wait 40–60 seconds** for the AI pipeline to process
+the document. The dashboard auto-refreshes every 30 seconds — the
+referral card will appear automatically. You do not need to manually
+refresh.
+
+**Upload clinical referral PDFs only.** Non-medical documents such as
+CVs or general documents will be processed but will return low
+confidence scores and should be rejected by the coordinator.
+
+**How documents reach the system:**
+- Manual upload — coordinator drags and drops a PDF directly on the
+  dashboard. This is the method available on this demo.
+- Automatic trigger — in production, PDFs uploaded to the GCS bucket
+  automatically trigger the pipeline via Cloud Pub/Sub. No manual
+  upload needed.
+
+**Scheduled batch processing** — automatic overnight batch upload of
+referrals is not yet implemented. This is planned as a future sprint
+item along with real hospital notification integration for Emergency
+cases.
 
 ---
 
