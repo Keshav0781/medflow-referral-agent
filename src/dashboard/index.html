@@ -1,391 +1,270 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MedFlow — Coordinator Dashboard</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        *{margin:0;padding:0;box-sizing:border-box}
-        :root{
-            --primary:#0f4c81;--primary-light:#1a6eb5;
-            --emergency:#dc2626;--emergency-bg:#fef2f2;--emergency-border:#fecaca;
-            --semi:#d97706;--semi-bg:#fffbeb;--semi-border:#fde68a;
-            --routine:#16a34a;--routine-bg:#f0fdf4;--routine-border:#bbf7d0;
-            --surface:#ffffff;--bg:#f1f5f9;--text:#0f172a;--muted:#64748b;
-            --border:#e2e8f0;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.08),0 4px 12px rgba(0,0,0,.04)
-        }
-        body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-        header{background:linear-gradient(135deg,#0f4c81 0%,#1a6eb5 50%,#0e7490 100%);padding:0 32px;height:64px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(15,76,129,.3)}
-        .header-left{display:flex;align-items:center;gap:16px}
-        .logo{width:36px;height:36px;background:rgba(255,255,255,.2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
-        .header-title{color:white;font-size:18px;font-weight:700;letter-spacing:-.3px}
-        .header-sub{color:rgba(255,255,255,.65);font-size:12px;margin-top:1px}
-        .header-right{display:flex;align-items:center;gap:12px}
-        .env-pill{background:rgba(255,255,255,.15);color:white;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.05em}
-        .live-dot{width:8px;height:8px;background:#4ade80;border-radius:50%;animation:pulse 2s infinite}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-        .container{max-width:1280px;margin:0 auto;padding:28px 32px}
-        .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
-        .stat-card{background:var(--surface);border-radius:var(--radius);padding:20px 24px;box-shadow:var(--shadow);border:1px solid var(--border);position:relative;overflow:hidden}
-        .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
-        .stat-card.total::before{background:linear-gradient(90deg,#0f4c81,#0e7490)}
-        .stat-card.emergency::before{background:var(--emergency)}
-        .stat-card.semi::before{background:var(--semi)}
-        .stat-card.routine::before{background:var(--routine)}
-        .stat-icon{font-size:24px;margin-bottom:10px}
-        .stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:500}
-        .stat-value{font-size:32px;font-weight:700;margin-top:4px;letter-spacing:-1px}
-        .stat-card.emergency .stat-value{color:var(--emergency)}
-        .stat-card.semi .stat-value{color:var(--semi)}
-        .stat-card.routine .stat-value{color:var(--routine)}
-        .stat-card.total .stat-value{color:var(--primary)}
-        .main-grid{display:grid;grid-template-columns:340px 1fr;gap:20px}
-        .panel{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border)}
-        .panel-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-        .panel-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
-        .panel-body{padding:24px}
-        .upload-zone{border:2px dashed #cbd5e0;border-radius:10px;padding:40px 24px;text-align:center;cursor:pointer;transition:all .2s;background:#fafbfc}
-        .upload-zone:hover{border-color:var(--primary-light);background:#f0f7ff}
-        .upload-zone.dragging{border-color:var(--primary);background:#e8f2ff}
-        .upload-icon{font-size:40px;margin-bottom:12px}
-        .upload-text{font-size:14px;color:var(--muted);line-height:1.6}
-        .upload-text strong{color:var(--primary)}
-        .upload-input{display:none}
-        .progress-section{margin-top:16px;display:none}
-        .progress-section.show{display:block}
-        .progress-label{font-size:12px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between}
-        .progress-track{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
-        .progress-bar{height:100%;background:linear-gradient(90deg,var(--primary),#0e7490);border-radius:3px;width:0;transition:width .3s}
-        .processing-steps{margin-top:16px;display:none}
-        .processing-steps.show{display:block}
-        .step{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px;color:var(--muted)}
-        .step.active{color:var(--primary)}
-        .step.done{color:var(--routine)}
-        .step-dot{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0}
-        .step.active .step-dot{background:var(--primary);animation:pulse 1s infinite}
-        .step.done .step-dot{background:var(--routine)}
-        .referral-list{display:flex;flex-direction:column;gap:12px}
-        .referral-card{border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:box-shadow .2s}
-        .referral-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.1)}
-        .referral-card.emergency{border-left:4px solid var(--emergency)}
-        .referral-card.semi-urgent{border-left:4px solid var(--semi)}
-        .referral-card.routine{border-left:4px solid var(--routine)}
-        .referral-top{padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start}
-        .referral-id{font-weight:700;font-size:15px;font-family:monospace;letter-spacing:.5px}
-        .referral-time{font-size:11px;color:var(--muted);margin-top:2px}
-        .badge{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.03em}
-        .badge.emergency{background:var(--emergency-bg);color:var(--emergency);border:1px solid var(--emergency-border)}
-        .badge.semi-urgent{background:var(--semi-bg);color:var(--semi);border:1px solid var(--semi-border)}
-        .badge.routine{background:var(--routine-bg);color:var(--routine);border:1px solid var(--routine-border)}
-        .referral-meta{padding:0 20px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-        .meta-item .meta-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:500}
-        .meta-item .meta-value{font-size:14px;font-weight:600;margin-top:3px}
-        .confidence-track{height:3px;background:var(--border);border-radius:2px;margin-top:5px}
-        .confidence-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--primary),#0e7490)}
-        .referral-summary{margin:0 20px 16px;padding:12px 16px;background:#f8fafc;border-radius:8px;font-size:13px;color:#334155;line-height:1.7;border-left:3px solid var(--primary-light)}
-        .referral-actions{padding:12px 20px;background:#fafbfc;border-top:1px solid var(--border);display:flex;gap:8px}
-        .btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;display:flex;align-items:center;gap:6px}
-        .btn:hover{transform:translateY(-1px)}
-        .btn-approve{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0}
-        .btn-approve:hover{background:#16a34a;color:white}
-        .btn-edit{background:#fef9c3;color:#854d0e;border:1px solid #fde047}
-        .btn-edit:hover{background:#ca8a04;color:white}
-        .btn-reject{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
-        .btn-reject:hover{background:#dc2626;color:white}
-        .btn-refresh{background:none;border:1px solid var(--border);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;color:var(--muted);font-family:inherit;transition:all .15s}
-        .btn-refresh:hover{background:var(--bg)}
-        .empty-state{text-align:center;padding:48px 24px;color:var(--muted)}
-        .empty-icon{font-size:48px;margin-bottom:12px;opacity:.5}
-        .empty-text{font-size:14px}
-        .toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:500;opacity:0;transform:translateY(8px);transition:all .3s;z-index:9999;max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,.15)}
-        .toast.success{background:#15803d;color:white;opacity:1;transform:translateY(0)}
-        .toast.error{background:#dc2626;color:white;opacity:1;transform:translateY(0)}
-        .toast.info{background:#0f4c81;color:white;opacity:1;transform:translateY(0)}
-        .approved-banner{background:var(--routine-bg);border:1px solid var(--routine-border);color:var(--routine);padding:8px 16px;border-radius:6px;font-size:12px;font-weight:500}
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedFlow AI — Clinical Referral Intelligence</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0f1e;--surface:#111827;--surface2:#1a2234;--border:#1f2d45;
+  --primary:#3b82f6;--primary-glow:rgba(59,130,246,.15);
+  --emergency:#ef4444;--emergency-glow:rgba(239,68,68,.15);
+  --semi:#f59e0b;--semi-glow:rgba(245,158,11,.15);
+  --routine:#10b981;--routine-glow:rgba(16,185,129,.15);
+  --text:#f1f5f9;--muted:#64748b;--muted2:#94a3b8;
+  --radius:14px;--radius-sm:8px;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+/* Animated background */
+body::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at 20% 20%,rgba(59,130,246,.07) 0%,transparent 50%),radial-gradient(ellipse at 80% 80%,rgba(16,185,129,.05) 0%,transparent 50%);pointer-events:none;z-index:0}
+header{position:relative;z-index:10;background:rgba(17,24,39,.8);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 32px;height:68px;display:flex;align-items:center;justify-content:space-between}
+.logo-area{display:flex;align-items:center;gap:14px}
+.logo-icon{width:40px;height:40px;background:linear-gradient(135deg,#3b82f6,#06b6d4);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 0 20px rgba(59,130,246,.4)}
+.logo-text{font-size:18px;font-weight:800;background:linear-gradient(135deg,#f1f5f9,#94a3b8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo-sub{font-size:11px;color:var(--muted);margin-top:1px;letter-spacing:.03em}
+.header-right{display:flex;align-items:center;gap:16px}
+.live-indicator{display:flex;align-items:center;gap:6px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);padding:5px 12px;border-radius:20px}
+.live-dot{width:6px;height:6px;background:#10b981;border-radius:50%;animation:livepulse 2s infinite}
+@keyframes livepulse{0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.4)}50%{box-shadow:0 0 0 4px rgba(16,185,129,0)}}
+.live-text{font-size:11px;color:#10b981;font-weight:500;letter-spacing:.05em}
+.env-badge{background:var(--primary-glow);border:1px solid rgba(59,130,246,.2);color:var(--primary);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.container{position:relative;z-index:1;max-width:1320px;margin:0 auto;padding:32px}
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px 24px;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}
+.stat:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.stat::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:var(--radius) var(--radius) 0 0}
+.stat.total::after{background:linear-gradient(90deg,#3b82f6,#06b6d4)}
+.stat.emergency::after{background:var(--emergency)}
+.stat.semi::after{background:var(--semi)}
+.stat.routine::after{background:var(--routine)}
+.stat-glow{position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;opacity:.15;filter:blur(20px)}
+.stat.total .stat-glow{background:#3b82f6}
+.stat.emergency .stat-glow{background:#ef4444}
+.stat.semi .stat-glow{background:#f59e0b}
+.stat.routine .stat-glow{background:#10b981}
+.stat-icon{font-size:22px;margin-bottom:12px}
+.stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:500}
+.stat-val{font-size:36px;font-weight:800;margin-top:4px;letter-spacing:-1.5px}
+.stat.total .stat-val{color:#60a5fa}
+.stat.emergency .stat-val{color:#f87171}
+.stat.semi .stat-val{color:#fbbf24}
+.stat.routine .stat-val{color:#34d399}
+/* Layout */
+.grid{display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card-header{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.02)}
+.card-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--muted2)}
+.card-body{padding:20px}
+/* Upload */
+.drop-zone{border:1.5px dashed rgba(59,130,246,.3);border-radius:var(--radius-sm);padding:36px 20px;text-align:center;cursor:pointer;transition:all .25s;background:rgba(59,130,246,.03)}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--primary);background:rgba(59,130,246,.08);box-shadow:0 0 30px rgba(59,130,246,.1) inset}
+.drop-icon{font-size:36px;margin-bottom:10px;filter:drop-shadow(0 0 8px rgba(59,130,246,.3))}
+.drop-text{font-size:13px;color:var(--muted);line-height:1.7}
+.drop-text strong{color:var(--primary)}
+input[type=file]{display:none}
+.progress-wrap{margin-top:16px;display:none}
+.progress-wrap.show{display:block}
+.prog-label{font-size:11px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between}
+.prog-track{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.prog-bar{height:100%;background:linear-gradient(90deg,#3b82f6,#06b6d4);border-radius:2px;width:0;transition:width .4s}
+.steps{margin-top:14px;display:none}
+.steps.show{display:block}
+.step{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:12px;color:var(--muted);transition:color .3s}
+.step.active{color:var(--primary)}
+.step.done{color:var(--routine)}
+.step-dot{width:6px;height:6px;border-radius:50%;background:var(--border);flex-shrink:0;transition:all .3s}
+.step.active .step-dot{background:var(--primary);box-shadow:0 0 8px var(--primary)}
+.step.done .step-dot{background:var(--routine)}
+/* Referral cards */
+.ref-list{display:flex;flex-direction:column;gap:12px}
+.ref-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;transition:all .2s}
+.ref-card:hover{border-color:rgba(59,130,246,.3);box-shadow:0 4px 24px rgba(0,0,0,.3),0 0 0 1px rgba(59,130,246,.1)}
+.ref-card.emergency{border-left:3px solid var(--emergency)}
+.ref-card.semi-urgent{border-left:3px solid var(--semi)}
+.ref-card.routine{border-left:3px solid var(--routine)}
+.ref-top{padding:14px 18px;display:flex;justify-content:space-between;align-items:flex-start}
+.ref-id{font-family:monospace;font-weight:700;font-size:14px;color:var(--text);letter-spacing:.5px}
+.ref-time{font-size:10px;color:var(--muted);margin-top:2px}
+.badge{padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.badge.emergency{background:var(--emergency-glow);color:#f87171;border:1px solid rgba(239,68,68,.2)}
+.badge.semi-urgent{background:var(--semi-glow);color:#fbbf24;border:1px solid rgba(245,158,11,.2)}
+.badge.routine{background:var(--routine-glow);color:#34d399;border:1px solid rgba(16,185,129,.2)}
+.ref-meta{padding:0 18px 12px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.meta-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:500}
+.meta-val{font-size:13px;font-weight:600;margin-top:3px;color:var(--muted2)}
+.conf-track{height:2px;background:var(--border);border-radius:1px;margin-top:5px}
+.conf-fill{height:100%;border-radius:1px;background:linear-gradient(90deg,#3b82f6,#06b6d4)}
+.summary-box{margin:0 18px 12px;padding:10px 14px;background:rgba(255,255,255,.03);border-radius:6px;border-left:2px solid rgba(59,130,246,.4);font-size:12px;color:var(--muted2);line-height:1.7}
+.ref-actions{padding:10px 18px;background:rgba(0,0,0,.2);border-top:1px solid var(--border);display:flex;gap:8px}
+.btn{padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;display:flex;align-items:center;gap:5px;letter-spacing:.02em}
+.btn:hover{transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn-approve{background:rgba(16,185,129,.1);color:#34d399;border:1px solid rgba(16,185,129,.2)}
+.btn-approve:hover{background:#10b981;color:white;box-shadow:0 4px 16px rgba(16,185,129,.3)}
+.btn-edit{background:rgba(245,158,11,.1);color:#fbbf24;border:1px solid rgba(245,158,11,.2)}
+.btn-edit:hover{background:#f59e0b;color:#0a0f1e;box-shadow:0 4px 16px rgba(245,158,11,.3)}
+.btn-reject{background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.2)}
+.btn-reject:hover{background:#ef4444;color:white;box-shadow:0 4px 16px rgba(239,68,68,.3)}
+.btn-refresh{background:transparent;border:1px solid var(--border);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;color:var(--muted);font-family:inherit;transition:all .15s}
+.btn-refresh:hover{border-color:var(--primary);color:var(--primary)}
+.empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.empty-icon{font-size:40px;margin-bottom:10px;opacity:.4}
+.empty-msg{font-size:13px}
+.toast{position:fixed;bottom:28px;right:28px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;opacity:0;transform:translateY(12px);transition:all .3s;z-index:9999;backdrop-filter:blur(10px);border:1px solid}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.success{background:rgba(16,185,129,.15);border-color:rgba(16,185,129,.3);color:#34d399}
+.toast.error{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:#f87171}
+.toast.info{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:#60a5fa}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
 </head>
 <body>
 <header>
-    <div class="header-left">
-        <div class="logo">🏥</div>
-        <div>
-            <div class="header-title">MedFlow Referral Agent</div>
-            <div class="header-sub">LMU Klinikum Munich — AI-Assisted Clinical Routing</div>
-        </div>
+  <div class="logo-area">
+    <div class="logo-icon">🏥</div>
+    <div>
+      <div class="logo-text">MedFlow AI</div>
+      <div class="logo-sub">Clinical Referral Intelligence · LMU Klinikum Munich</div>
     </div>
-    <div class="header-right">
-        <div class="live-dot"></div>
-        <div class="env-pill" id="env-pill">Loading...</div>
+  </div>
+  <div class="header-right">
+    <div class="live-indicator">
+      <div class="live-dot"></div>
+      <span class="live-text">LIVE</span>
     </div>
+    <div class="env-badge" id="env-badge">—</div>
+  </div>
 </header>
-
 <div class="container">
-    <div class="stats-grid">
-        <div class="stat-card total">
-            <div class="stat-icon">📋</div>
-            <div class="stat-label">Total Processed</div>
-            <div class="stat-value" id="stat-total">—</div>
+  <div class="stats">
+    <div class="stat total"><div class="stat-glow"></div><div class="stat-icon">📋</div><div class="stat-label">Total Processed</div><div class="stat-val" id="s-total">—</div></div>
+    <div class="stat emergency"><div class="stat-glow"></div><div class="stat-icon">🚨</div><div class="stat-label">Emergency</div><div class="stat-val" id="s-em">—</div></div>
+    <div class="stat semi"><div class="stat-glow"></div><div class="stat-icon">⚠️</div><div class="stat-label">Semi-urgent</div><div class="stat-val" id="s-semi">—</div></div>
+    <div class="stat routine"><div class="stat-glow"></div><div class="stat-icon">✅</div><div class="stat-label">Routine</div><div class="stat-val" id="s-routine">—</div></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📤 Upload Referral Document</div>
+      </div>
+      <div class="card-body">
+        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('finput').click()" ondragover="dOver(event)" ondrop="dDrop(event)" ondragleave="dLeave(event)">
+          <input type="file" id="finput" accept=".pdf" onchange="onFile(event)">
+          <div class="drop-icon">📄</div>
+          <div class="drop-text"><strong>Click to upload</strong> or drag & drop<br>PDF referral documents only · Max 10MB</div>
         </div>
-        <div class="stat-card emergency">
-            <div class="stat-icon">🚨</div>
-            <div class="stat-label">Emergency</div>
-            <div class="stat-value" id="stat-emergency">—</div>
+        <div class="progress-wrap" id="prog-wrap">
+          <div class="prog-label"><span id="prog-text">Uploading...</span><span id="prog-pct">0%</span></div>
+          <div class="prog-track"><div class="prog-bar" id="prog-bar"></div></div>
         </div>
-        <div class="stat-card semi">
-            <div class="stat-icon">⚠️</div>
-            <div class="stat-label">Semi-urgent</div>
-            <div class="stat-value" id="stat-semi">—</div>
+        <div class="steps" id="steps">
+          <div class="step" id="st1"><div class="step-dot"></div>Document uploaded to secure storage</div>
+          <div class="step" id="st2"><div class="step-dot"></div>Extracting clinical text from PDF</div>
+          <div class="step" id="st3"><div class="step-dot"></div>AI routing to department</div>
+          <div class="step" id="st4"><div class="step-dot"></div>Classifying urgency level</div>
+          <div class="step" id="st5"><div class="step-dot"></div>Generating clinical summary</div>
         </div>
-        <div class="stat-card routine">
-            <div class="stat-icon">✅</div>
-            <div class="stat-label">Routine</div>
-            <div class="stat-value" id="stat-routine">—</div>
-        </div>
+      </div>
     </div>
-
-    <div class="main-grid">
-        <div class="panel">
-            <div class="panel-header">
-                <div class="panel-title">📤 Upload Referral</div>
-            </div>
-            <div class="panel-body">
-                <div class="upload-zone" id="upload-zone"
-                     onclick="document.getElementById('file-input').click()"
-                     ondragover="handleDragOver(event)"
-                     ondrop="handleDrop(event)"
-                     ondragleave="handleDragLeave(event)">
-                    <input type="file" id="file-input" class="upload-input" accept=".pdf" onchange="handleFileSelect(event)">
-                    <div class="upload-icon">📄</div>
-                    <div class="upload-text">
-                        <strong>Click to upload</strong> or drag & drop<br>
-                        PDF referral documents only
-                    </div>
-                </div>
-
-                <div class="progress-section" id="progress-section">
-                    <div class="progress-label">
-                        <span id="progress-text">Uploading...</span>
-                        <span id="progress-pct">0%</span>
-                    </div>
-                    <div class="progress-track">
-                        <div class="progress-bar" id="progress-bar"></div>
-                    </div>
-                </div>
-
-                <div class="processing-steps" id="processing-steps">
-                    <div class="step" id="step-upload">
-                        <div class="step-dot"></div>Upload complete
-                    </div>
-                    <div class="step" id="step-extract">
-                        <div class="step-dot"></div>Extracting text
-                    </div>
-                    <div class="step" id="step-route">
-                        <div class="step-dot"></div>Routing to department
-                    </div>
-                    <div class="step" id="step-urgency">
-                        <div class="step-dot"></div>Classifying urgency
-                    </div>
-                    <div class="step" id="step-summary">
-                        <div class="step-dot"></div>Generating summary
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="panel">
-            <div class="panel-header">
-                <div class="panel-title">📋 Pending Referrals</div>
-                <button class="btn-refresh" onclick="loadReferrals()">↻ Refresh</button>
-            </div>
-            <div class="panel-body">
-                <div class="referral-list" id="referral-list">
-                    <div class="empty-state">
-                        <div class="empty-icon">🔍</div>
-                        <div class="empty-text">Loading referrals...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📋 Pending Coordinator Review</div>
+        <button class="btn-refresh" onclick="load()">↻ Refresh</button>
+      </div>
+      <div class="card-body">
+        <div class="ref-list" id="ref-list"><div class="empty"><div class="empty-icon">⏳</div><div class="empty-msg">Loading referrals...</div></div></div>
+      </div>
     </div>
+  </div>
 </div>
-
 <div class="toast" id="toast"></div>
-
 <script>
-const API = window.location.origin;
-
-async function loadReferrals() {
-    try {
-        const res = await fetch(`${API}/referrals`);
-        if (!res.ok) throw new Error("Failed");
-        const data = await res.json();
-        renderReferrals(data.referrals);
-        updateStats(data.referrals);
-        // Set env badge
-        if (data.referrals.length > 0) {
-            document.getElementById("env-pill").textContent = data.referrals[0].environment || "dev";
-        }
-    } catch(e) {
-        document.getElementById("referral-list").innerHTML =
-            '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Unable to load referrals</div></div>';
-    }
+const API=window.location.origin;
+async function load(){
+  try{
+    const r=await fetch(`${API}/referrals`);
+    if(!r.ok)throw new Error();
+    const d=await r.json();
+    render(d.referrals);
+    stats(d.referrals);
+    if(d.referrals.length)document.getElementById("env-badge").textContent=d.referrals[0].environment||"dev";
+  }catch{
+    document.getElementById("ref-list").innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-msg">Unable to load referrals.<br>Check connection.</div></div>';
+  }
 }
-
-function updateStats(referrals) {
-    document.getElementById("stat-total").textContent = referrals.length;
-    document.getElementById("stat-emergency").textContent = referrals.filter(r=>r.urgency==="Emergency").length;
-    document.getElementById("stat-semi").textContent = referrals.filter(r=>r.urgency==="Semi-urgent").length;
-    document.getElementById("stat-routine").textContent = referrals.filter(r=>r.urgency==="Routine").length;
+function stats(r){
+  document.getElementById("s-total").textContent=r.length;
+  document.getElementById("s-em").textContent=r.filter(x=>x.urgency==="Emergency").length;
+  document.getElementById("s-semi").textContent=r.filter(x=>x.urgency==="Semi-urgent").length;
+  document.getElementById("s-routine").textContent=r.filter(x=>x.urgency==="Routine").length;
 }
-
-function formatTime(ts) {
-    if (!ts) return "—";
-    const d = new Date(ts);
-    return d.toLocaleString("de-DE", {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+function fmt(ts){if(!ts)return"—";const d=new Date(ts);return d.toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});}
+function render(refs){
+  const el=document.getElementById("ref-list");
+  if(!refs.length){el.innerHTML='<div class="empty"><div class="empty-icon">✨</div><div class="empty-msg">No pending referrals.<br>Upload a document to begin.</div></div>';return;}
+  el.innerHTML=refs.map(r=>{
+    const uc=r.urgency?r.urgency.toLowerCase().replace(" ","-"):"";
+    const rc=r.routing_confidence?Math.round(r.routing_confidence*100):0;
+    const uc2=r.urgency_confidence?Math.round(r.urgency_confidence*100):0;
+    return`<div class="ref-card ${uc}">
+      <div class="ref-top">
+        <div><div class="ref-id">${r.document_id}</div><div class="ref-time">${fmt(r.timestamp)}</div></div>
+        <span class="badge ${uc}">${r.urgency||"Unknown"}</span>
+      </div>
+      <div class="ref-meta">
+        <div><div class="meta-label">Department</div><div class="meta-val">${r.department||"—"}</div><div class="conf-track"><div class="conf-fill" style="width:${rc}%"></div></div><div style="font-size:9px;color:var(--muted);margin-top:3px">${rc}% confidence</div></div>
+        <div><div class="meta-label">Urgency Score</div><div class="meta-val">${uc2}%</div><div class="conf-track"><div class="conf-fill" style="width:${uc2}%"></div></div></div>
+        <div><div class="meta-label">Processing Time</div><div class="meta-val">${r.processing_time_seconds?r.processing_time_seconds.toFixed(1)+"s":"—"}</div>${r.escalation_triggered?'<div style="color:#f87171;font-size:10px;margin-top:4px">🚨 Escalated</div>':""}</div>
+      </div>
+      ${r.summary?`<div class="summary-box">${r.summary}</div>`:""}
+      <div class="ref-actions">
+        <button class="btn btn-approve" onclick="act('${r.document_id}','approved')">✓ Approve</button>
+        <button class="btn btn-edit" onclick="act('${r.document_id}','edited')">✎ Edit</button>
+        <button class="btn btn-reject" onclick="act('${r.document_id}','rejected')">✗ Reject</button>
+      </div>
+    </div>`;
+  }).join("");
 }
-
-function renderReferrals(referrals) {
-    const list = document.getElementById("referral-list");
-    if (!referrals.length) {
-        list.innerHTML = '<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">No pending referrals.<br>Upload a document to get started.</div></div>';
-        return;
-    }
-    list.innerHTML = referrals.map(r => {
-        const urgencyClass = r.urgency ? r.urgency.toLowerCase().replace(" ","-") : "";
-        const conf = r.routing_confidence ? Math.round(r.routing_confidence*100) : 0;
-        const urgConf = r.urgency_confidence ? Math.round(r.urgency_confidence*100) : 0;
-        return `
-        <div class="referral-card ${urgencyClass}">
-            <div class="referral-top">
-                <div>
-                    <div class="referral-id">${r.document_id}</div>
-                    <div class="referral-time">${formatTime(r.timestamp)}</div>
-                </div>
-                <span class="badge ${urgencyClass}">${r.urgency||"Unknown"}</span>
-            </div>
-            <div class="referral-meta">
-                <div class="meta-item">
-                    <div class="meta-label">Department</div>
-                    <div class="meta-value">${r.department||"—"}</div>
-                    <div class="confidence-track"><div class="confidence-fill" style="width:${conf}%"></div></div>
-                    <div style="font-size:10px;color:var(--muted);margin-top:2px">${conf}% confidence</div>
-                </div>
-                <div class="meta-item">
-                    <div class="meta-label">Urgency Confidence</div>
-                    <div class="meta-value">${urgConf}%</div>
-                    <div class="confidence-track"><div class="confidence-fill" style="width:${urgConf}%"></div></div>
-                </div>
-                <div class="meta-item">
-                    <div class="meta-label">Processing Time</div>
-                    <div class="meta-value">${r.processing_time_seconds?r.processing_time_seconds.toFixed(1)+"s":"—"}</div>
-                    ${r.escalation_triggered?'<div style="color:var(--emergency);font-size:11px;margin-top:4px">🚨 Escalation triggered</div>':""}
-                </div>
-            </div>
-            ${r.summary?`<div class="referral-summary">${r.summary}</div>`:""}
-            <div class="referral-actions">
-                <button class="btn btn-approve" onclick="action('${r.document_id}','approved')">✓ Approve</button>
-                <button class="btn btn-edit" onclick="action('${r.document_id}','edited')">✎ Edit & Approve</button>
-                <button class="btn btn-reject" onclick="action('${r.document_id}','rejected')">✗ Reject</button>
-            </div>
-        </div>`;
-    }).join("");
+async function act(id,action){
+  try{
+    const r=await fetch(`${API}/coordinator/action`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({document_id:id,session_id:"dash-"+Date.now(),action,coordinator_id:"coordinator@lmu-klinikum.de"})});
+    if(r.ok){toast(`Referral ${action}`,"success");setTimeout(load,1500);}
+  }catch{toast("Error","error");}
 }
-
-async function action(docId, act) {
-    try {
-        const res = await fetch(`${API}/coordinator/action`, {
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({
-                document_id: docId,
-                session_id: "dashboard-" + Date.now(),
-                action: act,
-                coordinator_id: "coordinator@lmu-klinikum.de"
-            })
-        });
-        if (res.ok) {
-            showToast(`Referral ${act} successfully`, "success");
-            setTimeout(loadReferrals, 1500);
-        }
-    } catch(e) { showToast("Error recording action","error"); }
+function dOver(e){e.preventDefault();document.getElementById("drop-zone").classList.add("drag");}
+function dLeave(){document.getElementById("drop-zone").classList.remove("drag");}
+function dDrop(e){e.preventDefault();dLeave();upload(e.dataTransfer.files[0]);}
+function onFile(e){upload(e.target.files[0]);}
+async function upload(file){
+  if(!file)return;
+  if(!file.name.endsWith(".pdf")){toast("PDF files only","error");return;}
+  const pw=document.getElementById("prog-wrap"),pb=document.getElementById("prog-bar"),pp=document.getElementById("prog-pct"),sw=document.getElementById("steps");
+  pw.classList.add("show");sw.classList.add("show");
+  let p=0;
+  const iv=setInterval(()=>{
+    p=Math.min(p+4,88);pb.style.width=p+"%";pp.textContent=p+"%";
+    if(p>20)setS("st1","done");
+    if(p>40)setS("st2","done");
+    if(p>55){setS("st3","active");}
+    if(p>68){setS("st3","done");setS("st4","active");}
+    if(p>80){setS("st4","done");setS("st5","active");}
+  },350);
+  try{
+    const fd=new FormData();fd.append("file",file);
+    const r=await fetch(`${API}/upload`,{method:"POST",body:fd});
+    clearInterval(iv);pb.style.width="100%";pp.textContent="100%";setS("st5","done");
+    if(r.ok){toast("Document uploaded — AI processing started","info");setTimeout(()=>{pw.classList.remove("show");sw.classList.remove("show");resetS();},2000);setTimeout(load,10000);}
+    else{toast("Upload failed","error");pw.classList.remove("show");sw.classList.remove("show");resetS();}
+  }catch{clearInterval(iv);toast("Upload error","error");pw.classList.remove("show");sw.classList.remove("show");resetS();}
+  document.getElementById("finput").value="";
 }
-
-function handleFileSelect(e) { uploadFile(e.target.files[0]); }
-function handleDragOver(e) { e.preventDefault(); document.getElementById("upload-zone").classList.add("dragging"); }
-function handleDragLeave(e) { document.getElementById("upload-zone").classList.remove("dragging"); }
-function handleDrop(e) {
-    e.preventDefault();
-    document.getElementById("upload-zone").classList.remove("dragging");
-    uploadFile(e.dataTransfer.files[0]);
-}
-
-async function uploadFile(file) {
-    if (!file) return;
-    if (!file.name.endsWith(".pdf")) { showToast("Please upload a PDF file","error"); return; }
-
-    const progress = document.getElementById("progress-section");
-    const bar = document.getElementById("progress-bar");
-    const pct = document.getElementById("progress-pct");
-    const steps = document.getElementById("processing-steps");
-    progress.classList.add("show");
-    steps.classList.add("show");
-
-    // Animate progress
-    let p = 0;
-    const interval = setInterval(() => {
-        p = Math.min(p + 5, 90);
-        bar.style.width = p + "%";
-        pct.textContent = p + "%";
-        if (p >= 30) setStep("step-upload","done");
-        if (p >= 50) setStep("step-extract","done");
-        if (p >= 65) setStep("step-route","active");
-        if (p >= 75) { setStep("step-route","done"); setStep("step-urgency","active"); }
-        if (p >= 85) { setStep("step-urgency","done"); setStep("step-summary","active"); }
-    }, 400);
-
-    try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await fetch(`${API}/upload`, {method:"POST", body:formData});
-        clearInterval(interval);
-        bar.style.width = "100%"; pct.textContent = "100%";
-        setStep("step-summary","done");
-        if (res.ok) {
-            showToast("Document uploaded — AI processing started","info");
-            setTimeout(() => { progress.classList.remove("show"); steps.classList.remove("show"); resetSteps(); }, 2000);
-            setTimeout(loadReferrals, 8000);
-        } else {
-            showToast("Upload failed","error");
-            progress.classList.remove("show"); steps.classList.remove("show"); resetSteps();
-        }
-    } catch(e) {
-        clearInterval(interval);
-        showToast("Upload error — check connection","error");
-        progress.classList.remove("show"); steps.classList.remove("show"); resetSteps();
-    }
-    document.getElementById("file-input").value = "";
-}
-
-function setStep(id, state) {
-    const el = document.getElementById(id);
-    el.className = "step " + state;
-}
-function resetSteps() {
-    ["step-upload","step-extract","step-route","step-urgency","step-summary"].forEach(id => {
-        document.getElementById(id).className = "step";
-    });
-}
-
-function showToast(msg, type="info") {
-    const t = document.getElementById("toast");
-    t.textContent = msg;
-    t.className = "toast " + type;
-    setTimeout(() => { t.className = "toast"; }, 3500);
-}
-
-loadReferrals();
-setInterval(loadReferrals, 30000);
+function setS(id,s){const e=document.getElementById(id);e.className="step "+s;}
+function resetS(){["st1","st2","st3","st4","st5"].forEach(id=>document.getElementById(id).className="step");}
+function toast(msg,type="info"){const t=document.getElementById("toast");t.textContent=msg;t.className="toast show "+type;setTimeout(()=>t.className="toast",3500);}
+load();setInterval(load,30000);
 </script>
 </body>
 </html>
