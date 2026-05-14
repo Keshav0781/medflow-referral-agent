@@ -181,6 +181,20 @@ resource "google_project_iam_member" "pubsub_subscriber" {
   role    = "roles/pubsub.subscriber"
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
+
+# Run BigQuery queries — required for coordinator dashboard referral listing
+resource "google_project_iam_member" "bigquery_job_user" {
+  project = var.project_id
+  role    = "roles/bigquery.jobUser"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# Upload referral PDFs to GCS — required for dashboard file upload
+resource "google_project_iam_member" "storage_object_creator" {
+  project = var.project_id
+  role    = "roles/storage.objectCreator"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
 # Allow public access to Cloud Run service
 # Required for health checks and coordinator dashboard
 resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
