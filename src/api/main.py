@@ -322,7 +322,12 @@ async def list_referrals(limit: int = 20):
                 escalation_triggered, coordinator_action,
                 timestamp
             FROM `{settings.gcp_project_id}.{settings.bigquery_dataset}.{settings.bigquery_table}`
-            WHERE coordinator_action IS NULL
+            WHERE document_id NOT IN (
+                SELECT DISTINCT document_id
+                FROM `{settings.gcp_project_id}.{settings.bigquery_dataset}.{settings.bigquery_table}`
+                WHERE coordinator_action IS NOT NULL
+            )
+            AND coordinator_action IS NULL
             ORDER BY timestamp DESC
             LIMIT @limit
         """
