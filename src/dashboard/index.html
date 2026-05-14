@@ -106,6 +106,21 @@ input[type=file]{display:none}
 .btn-approve:hover{background:#10b981;color:white;box-shadow:0 4px 16px rgba(16,185,129,.3)}
 .btn-edit{background:rgba(245,158,11,.1);color:#fbbf24;border:1px solid rgba(245,158,11,.2)}
 .btn-edit:hover{background:#f59e0b;color:#0a0f1e;box-shadow:0 4px 16px rgba(245,158,11,.3)}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px;width:100%;max-width:440px;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:6px}
+.modal p{font-size:12px;color:var(--muted);margin-bottom:24px}
+.modal-field{margin-bottom:18px}
+.modal-field label{display:block;font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.modal-field select{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:var(--radius-sm);font-size:14px;font-family:inherit;cursor:pointer;appearance:none}
+.modal-field select:focus{outline:none;border-color:var(--primary)}
+.modal-actions{display:flex;gap:10px;margin-top:24px}
+.modal-actions button{flex:1;padding:11px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.btn-modal-confirm{background:var(--primary);color:#fff}
+.btn-modal-confirm:hover{background:#2563eb;box-shadow:0 4px 16px rgba(59,130,246,.3)}
+.btn-modal-cancel{background:var(--surface2);color:var(--muted2);border:1px solid var(--border) !important}
+.btn-modal-cancel:hover{color:var(--text);border-color:var(--muted) !important}
 .btn-reject{background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.2)}
 .btn-reject:hover{background:#ef4444;color:white;box-shadow:0 4px 16px rgba(239,68,68,.3)}
 .btn-refresh{background:transparent;border:1px solid var(--border);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;color:var(--muted);font-family:inherit;transition:all .15s}
@@ -180,6 +195,39 @@ input[type=file]{display:none}
     </div>
   </div>
 </div>
+<div class="modal-overlay" id="edit-modal" onclick="modalBackdrop(event)">
+  <div class="modal">
+    <h3>&#9998; Edit Referral</h3>
+    <p>Modify the AI classification before confirming. Your change will be logged.</p>
+    <div class="modal-field">
+      <label>Department</label>
+      <select id="edit-dept">
+        <option>Cardiology</option>
+        <option>Neurology</option>
+        <option>Orthopedics</option>
+        <option>General Surgery</option>
+        <option>Internal Medicine</option>
+        <option>Oncology</option>
+        <option>Pulmonology</option>
+        <option>Gastroenterology</option>
+        <option>Nephrology</option>
+        <option>Endocrinology</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Urgency</label>
+      <select id="edit-urgency">
+        <option>Routine</option>
+        <option>Semi-urgent</option>
+        <option>Emergency</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-modal-confirm" onclick="confirmEdit()">Confirm Edit</button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 <script>
 const API=window.location.origin;
@@ -209,7 +257,7 @@ function render(refs){
     const uc=r.urgency?r.urgency.toLowerCase().replace(" ","-"):"";
     const rc=r.routing_confidence?Math.round(r.routing_confidence*100):0;
     const uc2=r.urgency_confidence?Math.round(r.urgency_confidence*100):0;
-    return`<div class="ref-card ${uc}">
+    return`<div class="ref-card ${uc}" data-id="${r.document_id}" data-department="${r.department||''}" data-urgency="${r.urgency||''}">
       <div class="ref-top">
         <div><div class="ref-id">${r.document_id}</div><div class="ref-time">${fmt(r.timestamp)}</div></div>
         <span class="badge ${uc}">${r.urgency||"Unknown"}</span>
@@ -229,10 +277,37 @@ function render(refs){
   }).join("");
 }
 async function act(id,action){
+  if(action==="edited"){openEditModal(id);return;}
   try{
     const r=await fetch(`${API}/coordinator/action`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({document_id:id,session_id:"dash-"+Date.now(),action,coordinator_id:"coordinator@lmu-klinikum.de"})});
     if(r.ok){toast(`Referral ${action}`,"success");setTimeout(load,1500);}
   }catch{toast("Error","error");}
+}
+let _editId=null;
+function openEditModal(id){
+  const card=document.querySelector('[data-id="'+id+'"]');
+  if(card){
+    const dept=card.dataset.department||'';
+    const urg=card.dataset.urgency||'';
+    const ds=document.getElementById('edit-dept');
+    const us=document.getElementById('edit-urgency');
+    for(let o of ds.options)if(o.value===dept)o.selected=true;
+    for(let o of us.options)if(o.value===urg)o.selected=true;
+  }
+  _editId=id;
+  document.getElementById('edit-modal').classList.add('open');
+}
+function closeModal(){document.getElementById('edit-modal').classList.remove('open');_editId=null;}
+function modalBackdrop(e){if(e.target===document.getElementById('edit-modal'))closeModal();}
+async function confirmEdit(){
+  if(!_editId)return;
+  const dept=document.getElementById('edit-dept').value;
+  const urg=document.getElementById('edit-urgency').value;
+  try{
+    const r=await fetch(`${API}/coordinator/action`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({document_id:_editId,session_id:'dash-'+Date.now(),action:'edited',coordinator_id:'coordinator@lmu-klinikum.de',edited_department:dept,edited_urgency:urg})});
+    if(r.ok){closeModal();toast('Referral updated','success');setTimeout(load,1500);}
+    else{toast('Error saving edit','error');}
+  }catch{toast('Error','error');}
 }
 function dOver(e){e.preventDefault();document.getElementById("drop-zone").classList.add("drag");}
 function dLeave(){document.getElementById("drop-zone").classList.remove("drag");}
